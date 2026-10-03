@@ -26,6 +26,17 @@ function toStudent(row: PlayerRow, sessionCode: string) {
   };
 }
 
+function redactRegistrationInputs(value: string | null, inputs: string[]) {
+  if (value === null) {
+    return null;
+  }
+
+  return inputs
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length)
+    .reduce((message, input) => message.split(input).join("[REDACTED]"), value);
+}
+
 export async function GET(request: Request) {
   const authorization = await getTeacherAuthorization();
   if (!authorization.ok) {
@@ -95,6 +106,22 @@ export async function POST(request: Request) {
     });
 
     if (error) {
+      const errorInputs = [
+        sessionCode,
+        sessionCode.toLowerCase(),
+        name,
+        name.toLowerCase(),
+        name.toUpperCase(),
+        resumeToken,
+        resumeTokenHash,
+      ];
+      console.error("Student registration RPC failed", {
+        code: error.code,
+        message: redactRegistrationInputs(error.message, errorInputs),
+        details: redactRegistrationInputs(error.details, errorInputs),
+        hint: redactRegistrationInputs(error.hint, errorInputs),
+      });
+
       if (error.code === "22023") {
         return Response.json({ error: "Enter a valid classroom code and a name of 1 to 80 characters." }, { status: 400 });
       }

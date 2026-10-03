@@ -71,6 +71,7 @@ export default function TeacherPage() {
   const [students, setStudents] = useState<StudentEntry[]>([]);
   const [message, setMessage] = useState("Create a session to get a shareable code.");
   const [sessionsError, setSessionsError] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     let isCurrent = true;
@@ -215,15 +216,26 @@ export default function TeacherPage() {
   }
 
   async function handleLogout() {
-    const { error } = await createClient().auth.signOut();
-
-    if (error) {
-      setMessage("Could not log out. Please try again.");
+    if (isLoggingOut) {
       return;
     }
 
-    router.replace("/teacher/login");
-    router.refresh();
+    setIsLoggingOut(true);
+    try {
+      const { error } = await createClient().auth.signOut();
+
+      if (error) {
+        setMessage("Could not log out. Please check your connection and try again.");
+        setIsLoggingOut(false);
+        return;
+      }
+
+      router.replace("/teacher/login");
+      router.refresh();
+    } catch {
+      setMessage("Could not log out. Please check your connection and try again.");
+      setIsLoggingOut(false);
+    }
   }
 
   const currentSessionStudents = students.filter((student) => student.sessionCode === sessionCode);
@@ -248,9 +260,10 @@ export default function TeacherPage() {
             <button
               type="button"
               onClick={handleLogout}
-              className="rounded-xl border border-[var(--brand-gold)]/60 bg-[var(--brand-navy)] px-4 py-2 font-bold text-[var(--brand-ivory)] transition hover:bg-[var(--brand-navy)]/80"
+              disabled={isLoggingOut}
+              className="rounded-xl border border-[var(--brand-gold)]/60 bg-[var(--brand-navy)] px-4 py-2 font-bold text-[var(--brand-ivory)] transition hover:bg-[var(--brand-navy)]/80 disabled:cursor-wait disabled:opacity-70"
             >
-              Log Out
+              {isLoggingOut ? "Logging Out..." : "Log Out"}
             </button>
             <Link
               href="/"

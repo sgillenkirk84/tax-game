@@ -42,9 +42,10 @@ function generateCode() {
 }
 
 export async function GET(request: Request) {
+  const noStoreHeaders = { "Cache-Control": "no-store, max-age=0" };
   const authorization = await getTeacherAuthorization();
   if (!authorization.ok) {
-    return Response.json({ error: authorization.message }, { status: authorization.status });
+    return Response.json({ error: authorization.message }, { status: authorization.status, headers: noStoreHeaders });
   }
 
   const code = new URL(request.url).searchParams.get("code")?.trim().toUpperCase();
@@ -58,23 +59,23 @@ export async function GET(request: Request) {
     const { data: sessions, error } = await sessionsQuery.order("created_at", { ascending: false });
 
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return Response.json({ error: error.message }, { status: 500, headers: noStoreHeaders });
     }
 
-    return Response.json((sessions as SessionRow[]).map(toSessionResponse));
+    return Response.json((sessions as SessionRow[]).map(toSessionResponse), { headers: noStoreHeaders });
   }
 
   const { data: session, error } = await sessionsQuery.eq("session_code", code).maybeSingle();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message }, { status: 500, headers: noStoreHeaders });
   }
 
   if (!session) {
-    return Response.json({ error: "That session code does not exist." }, { status: 404 });
+    return Response.json({ error: "That session code does not exist." }, { status: 404, headers: noStoreHeaders });
   }
 
-  return Response.json(toSessionResponse(session as SessionRow));
+  return Response.json(toSessionResponse(session as SessionRow), { headers: noStoreHeaders });
 }
 
 export async function POST(request: Request) {

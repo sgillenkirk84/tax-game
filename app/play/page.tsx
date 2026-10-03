@@ -103,10 +103,23 @@ export default function PlayPage() {
                 id="sessionCode"
                 type="text"
                 value={sessionCode}
-                onChange={(event) => setSessionCode(event.target.value)}
+                onChange={(event) => setSessionCode(event.target.value.toUpperCase())}
                 placeholder="EX: ABC123"
+                maxLength={6}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
                 className="w-full rounded-xl border border-[var(--brand-navy)]/30 bg-[var(--brand-ivory)] px-4 py-3 text-[var(--brand-navy)] outline-none transition focus:border-[var(--brand-gold)] focus:ring-2 focus:ring-[var(--brand-gold)]/40"
               />
+              {sessionCode ? (
+                <button
+                  type="button"
+                  onClick={() => setSessionCode("")}
+                  className="mt-2 text-sm font-bold text-[var(--brand-navy)] underline underline-offset-2"
+                >
+                  Clear code
+                </button>
+              ) : null}
             </div>
 
             <div>

@@ -29,10 +29,8 @@ type SessionRecord = {
   createdAt: string;
 };
 
-const DB_ACTIVE_SESSION_KEY = "my-tax-life-db-active-session";
-
 async function fetchSessionsFromApi(): Promise<SessionRecord[]> {
-  const response = await fetch("/api/sessions");
+  const response = await fetch("/api/sessions", { cache: "no-store" });
   const result = (await response.json()) as ApiSessionRecord[] | { error?: string };
 
   if (!response.ok) {
@@ -54,14 +52,9 @@ async function fetchSessionsFromApi(): Promise<SessionRecord[]> {
   }));
 }
 
-function chooseSession(
-  sessionList: SessionRecord[],
-  savedActiveId: string | null,
-  preferredSessionId?: string
-): SessionRecord | undefined {
+function chooseSession(sessionList: SessionRecord[], preferredSessionId?: string): SessionRecord | undefined {
   return (
     sessionList.find((session) => session.id === preferredSessionId) ??
-    sessionList.find((session) => session.id === savedActiveId) ??
     sessionList.find((session) => session.name.trim().toLowerCase() === "beta 2026") ??
     sessionList[0]
   );
@@ -89,15 +82,11 @@ export default function TeacherPage() {
           return;
         }
 
-        const selectedSession = chooseSession(
-          sessionList,
-          window.localStorage.getItem(DB_ACTIVE_SESSION_KEY)
-        );
+        const selectedSession = chooseSession(sessionList);
         setSessions(sessionList);
         setSessionsError("");
 
         if (selectedSession) {
-          window.localStorage.setItem(DB_ACTIVE_SESSION_KEY, selectedSession.id);
           setActiveSessionId(selectedSession.id);
           setSessionName(selectedSession.name);
           setSeatCount(selectedSession.seatCount);
@@ -188,11 +177,7 @@ export default function TeacherPage() {
 
     try {
       const sessionList = await fetchSessionsFromApi();
-      const selectedSession = chooseSession(
-        sessionList,
-        window.localStorage.getItem(DB_ACTIVE_SESSION_KEY),
-        createdSession.id
-      );
+      const selectedSession = chooseSession(sessionList, createdSession.id);
       setSessions(sessionList);
       setSessionsError("");
 
@@ -200,7 +185,6 @@ export default function TeacherPage() {
         throw new Error("The created session was not returned by the session list.");
       }
 
-      window.localStorage.setItem(DB_ACTIVE_SESSION_KEY, selectedSession.id);
       setActiveSessionId(selectedSession.id);
       setSessionName(selectedSession.name);
       setSeatCount(selectedSession.seatCount);
@@ -223,7 +207,6 @@ export default function TeacherPage() {
       return;
     }
 
-    window.localStorage.setItem(DB_ACTIVE_SESSION_KEY, sessionId);
     setActiveSessionId(sessionId);
     setSessionName(selected.name);
     setSeatCount(selected.seatCount);

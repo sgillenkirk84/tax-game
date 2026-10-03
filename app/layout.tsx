@@ -13,8 +13,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "My Tax Life",
-  description: "An educational tax simulation game for students and classrooms.",
+  title: "Money Moves",
+  description: "An educational financial literacy simulation game for students and classrooms.",
+  openGraph: {
+    title: "Money Moves",
+    description: "An educational financial literacy simulation game for students and classrooms.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Money Moves",
+    description: "An educational financial literacy simulation game for students and classrooms.",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,98 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 
 type PlayerSession = {
+  id: string;
+  resumeToken: string;
   sessionCode: string;
   displayName: string;
   joinedAt: string;
 };
 
-type SessionRecord = {
-  id: string;
-  name: string;
-  code: string;
-  seatCount: number;
-  createdAt: string;
-};
-
-type StudentEntry = {
-  id: string;
-  name: string;
-  sessionCode: string;
-  joinedAt: string;
-};
-
 const PLAYER_STORAGE_KEY = "my-tax-life-player";
-const SESSIONS_KEY = "my-tax-life-sessions";
-const STUDENT_STORAGE_KEY = "my-tax-life-students";
-const LEGACY_SESSION_KEY = "my-tax-life-session";
-
-function getSessionsFromStorage(): SessionRecord[] {
-  const savedSessions = window.localStorage.getItem(SESSIONS_KEY);
-
-  if (savedSessions) {
-    try {
-      const parsed = JSON.parse(savedSessions) as SessionRecord[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    } catch {
-      window.localStorage.removeItem(SESSIONS_KEY);
-    }
-  }
-
-  const legacySession = window.localStorage.getItem(LEGACY_SESSION_KEY);
-
-  if (legacySession) {
-    try {
-      const parsed = JSON.parse(legacySession) as SessionRecord;
-      const migrated = [parsed];
-      window.localStorage.setItem(SESSIONS_KEY, JSON.stringify(migrated));
-      window.localStorage.removeItem(LEGACY_SESSION_KEY);
-      return migrated;
-    } catch {
-      window.localStorage.removeItem(LEGACY_SESSION_KEY);
-    }
-  }
-
-  return [];
-}
 
 export default function PlayPage() {
+  const router = useRouter();
   const [sessionCode, setSessionCode] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [message, setMessage] = useState("");
   const [joined, setJoined] = useState(false);
 
-  useEffect(() => {
-    const savedPlayer = window.localStorage.getItem(PLAYER_STORAGE_KEY);
-    const savedSessions = getSessionsFromStorage();
-
-    if (savedPlayer) {
-      try {
-        const parsedPlayer = JSON.parse(savedPlayer) as PlayerSession;
-
-        if (parsedPlayer.sessionCode && parsedPlayer.displayName) {
-          setSessionCode(parsedPlayer.sessionCode);
-          setDisplayName(parsedPlayer.displayName);
-          setJoined(true);
-          setMessage(
-            `Welcome back, ${parsedPlayer.displayName}. You are joined to session ${parsedPlayer.sessionCode}.`
-          );
-        }
-      } catch {
-        window.localStorage.removeItem(PLAYER_STORAGE_KEY);
-      }
-    }
-
-    if (savedSessions.length > 0 && !sessionCode) {
-      setSessionCode(savedSessions[0].code);
-    }
-  }, [sessionCode]);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const cleanedSessionCode = sessionCode.trim().toUpperCase();
@@ -103,52 +32,46 @@ export default function PlayPage() {
       return;
     }
 
-    const savedSessions = getSessionsFromStorage();
-    const matchingSession = savedSessions.find((session) => session.code === cleanedSessionCode);
+    try {
+      const response = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionCode: cleanedSessionCode,
+          name: cleanedDisplayName,
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        id?: string;
+        resumeToken?: string;
+        joinedAt?: string;
+      };
 
-    if (!matchingSession) {
-      setMessage("That session code does not exist yet. Please ask the teacher to create one first.");
-      return;
-    }
-
-    const savedStudents = window.localStorage.getItem(STUDENT_STORAGE_KEY);
-    const currentStudents = savedStudents ? (JSON.parse(savedStudents) as StudentEntry[]) : [];
-    const matchingStudents = currentStudents.filter(
-      (student) => student.sessionCode === cleanedSessionCode
-    );
-
-    if (
-      !matchingStudents.some(
-        (student) => student.name.toLowerCase() === cleanedDisplayName.toLowerCase()
-      )
-    ) {
-      if (matchingStudents.length >= matchingSession.seatCount) {
-        setMessage("This session is full. Please ask the teacher for a new code.");
+      if (!response.ok) {
+        setMessage(result.error ?? "Registration failed. Please try again.");
+        return;
+      }
+      if (!result.id || !result.resumeToken) {
+        setMessage("Registration did not return the secure player session details. Please try again.");
         return;
       }
 
-      const nextStudent: StudentEntry = {
-        id: Date.now().toString(),
-        name: cleanedDisplayName,
+      const playerSession: PlayerSession = {
+        id: result.id,
+        resumeToken: result.resumeToken,
         sessionCode: cleanedSessionCode,
-        joinedAt: new Date().toISOString(),
+        displayName: cleanedDisplayName,
+        joinedAt: result.joinedAt ?? new Date().toISOString(),
       };
 
-      const updatedStudents = [...currentStudents, nextStudent];
-      window.localStorage.setItem(STUDENT_STORAGE_KEY, JSON.stringify(updatedStudents));
+      window.localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(playerSession));
+      setJoined(true);
+      setMessage(`${cleanedDisplayName} is now joined to session ${cleanedSessionCode}. Redirecting...`);
+      router.push("/play/game");
+    } catch {
+      setMessage("Could not reach shared registration storage. Check your connection and try again.");
     }
-
-    const playerSession: PlayerSession = {
-      sessionCode: cleanedSessionCode,
-      displayName: cleanedDisplayName,
-      joinedAt: new Date().toISOString(),
-    };
-
-    window.localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(playerSession));
-    setJoined(true);
-    setMessage(
-      `${cleanedDisplayName} is now joined to session ${cleanedSessionCode}.`
-    );
   }
 
   return (

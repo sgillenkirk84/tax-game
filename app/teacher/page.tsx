@@ -1,7 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useTeacherName } from "./teacher-identity";
+
+type ApiSessionRecord = {
+  id: string;
+  name: string;
+  code: string;
+  seat_count: number;
+  created_at: string;
+};
 
 type StudentEntry = {
   id: string;
@@ -18,161 +29,191 @@ type SessionRecord = {
   createdAt: string;
 };
 
-const SESSIONS_KEY = "my-tax-life-sessions";
-const ACTIVE_SESSION_KEY = "my-tax-life-active-session";
-const STUDENT_STORAGE_KEY = "my-tax-life-students";
-const LEGACY_SESSION_KEY = "my-tax-life-session";
+const DB_ACTIVE_SESSION_KEY = "my-tax-life-db-active-session";
 
-function generateCode() {
-  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const numbers = "23456789";
-  const chars: string[] = [];
+async function fetchSessionsFromApi(): Promise<SessionRecord[]> {
+  const response = await fetch("/api/sessions");
+  const result = (await response.json()) as ApiSessionRecord[] | { error?: string };
 
-  for (let index = 0; index < 3; index += 1) {
-    chars.push(letters[Math.floor(Math.random() * letters.length)]);
+  if (!response.ok) {
+    throw new Error(
+      (result as { error?: string }).error ?? "Could not load classroom sessions."
+    );
   }
 
-  for (let index = 0; index < 3; index += 1) {
-    chars.push(numbers[Math.floor(Math.random() * numbers.length)]);
+  if (!Array.isArray(result)) {
+    throw new Error("The session list response was invalid.");
   }
 
-  return chars.join("");
+  return result.map((session) => ({
+    id: session.id,
+    name: session.name,
+    code: session.code,
+    seatCount: session.seat_count,
+    createdAt: session.created_at,
+  }));
 }
 
-function getSessionsFromStorage(): SessionRecord[] {
-  const savedSessions = window.localStorage.getItem(SESSIONS_KEY);
-
-  if (savedSessions) {
-    try {
-      const parsed = JSON.parse(savedSessions) as SessionRecord[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    } catch {
-      window.localStorage.removeItem(SESSIONS_KEY);
-    }
-  }
-
-  const legacySession = window.localStorage.getItem(LEGACY_SESSION_KEY);
-
-  if (legacySession) {
-    try {
-      const parsed = JSON.parse(legacySession) as SessionRecord;
-      const migrated = [parsed];
-      window.localStorage.setItem(SESSIONS_KEY, JSON.stringify(migrated));
-      window.localStorage.removeItem(LEGACY_SESSION_KEY);
-      return migrated;
-    } catch {
-      window.localStorage.removeItem(LEGACY_SESSION_KEY);
-    }
-  }
-
-  return [];
+function chooseSession(
+  sessionList: SessionRecord[],
+  savedActiveId: string | null,
+  preferredSessionId?: string
+): SessionRecord | undefined {
+  return (
+    sessionList.find((session) => session.id === preferredSessionId) ??
+    sessionList.find((session) => session.id === savedActiveId) ??
+    sessionList.find((session) => session.name.trim().toLowerCase() === "beta 2026") ??
+    sessionList[0]
+  );
 }
 
 export default function TeacherPage() {
+  const router = useRouter();
+  const teacherName = useTeacherName();
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [activeSessionId, setActiveSessionId] = useState("");
   const [sessionName, setSessionName] = useState("Beta 2026");
   const [seatCount, setSeatCount] = useState(30);
-  const [sessionCode, setSessionCode] = useState("BETA2026");
+  const [sessionCode, setSessionCode] = useState("");
   const [students, setStudents] = useState<StudentEntry[]>([]);
-  const [message, setMessage] = useState("This beta session is ready for testing.");
+  const [message, setMessage] = useState("Create a session to get a shareable code.");
+  const [sessionsError, setSessionsError] = useState("");
 
   useEffect(() => {
-    const sessionList = getSessionsFromStorage();
+    let isCurrent = true;
 
-    if (sessionList.length === 0) {
-      const starterSession: SessionRecord = {
-        id: Date.now().toString(),
-        name: "Beta 2026",
-        code: generateCode(),
-        seatCount: 30,
-        createdAt: new Date().toISOString(),
-      };
+    async function loadSessions() {
+      try {
+        const sessionList = await fetchSessionsFromApi();
+        if (!isCurrent) {
+          return;
+        }
 
-      window.localStorage.setItem(SESSIONS_KEY, JSON.stringify([starterSession]));
-      window.localStorage.setItem(ACTIVE_SESSION_KEY, starterSession.id);
-      setSessions([starterSession]);
-      setActiveSessionId(starterSession.id);
-      setSessionName(starterSession.name);
-      setSeatCount(starterSession.seatCount);
-      setSessionCode(starterSession.code);
+        const selectedSession = chooseSession(
+          sessionList,
+          window.localStorage.getItem(DB_ACTIVE_SESSION_KEY)
+        );
+        setSessions(sessionList);
+        setSessionsError("");
+
+        if (selectedSession) {
+          window.localStorage.setItem(DB_ACTIVE_SESSION_KEY, selectedSession.id);
+          setActiveSessionId(selectedSession.id);
+          setSessionName(selectedSession.name);
+          setSeatCount(selectedSession.seatCount);
+          setSessionCode(selectedSession.code);
+        } else {
+          setActiveSessionId("");
+          setSessionCode("");
+          setStudents([]);
+        }
+      } catch (error) {
+        if (isCurrent) {
+          setSessionsError(
+            `Could not load classroom sessions. ${
+              error instanceof Error ? error.message : "Check your connection and try again."
+            }`
+          );
+        }
+      }
+    }
+
+    void loadSessions();
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionCode) {
       return;
     }
 
-    const savedActiveId = window.localStorage.getItem(ACTIVE_SESSION_KEY) ?? sessionList[0].id;
-    const selectedSession = sessionList.find((item) => item.id === savedActiveId) ?? sessionList[0];
-
-    setSessions(sessionList);
-    setActiveSessionId(selectedSession.id);
-    setSessionName(selectedSession.name);
-    setSeatCount(selectedSession.seatCount);
-    setSessionCode(selectedSession.code);
-
-    const savedStudents = window.localStorage.getItem(STUDENT_STORAGE_KEY);
-
-    if (savedStudents) {
+    let isCurrent = true;
+    async function refreshStudents() {
       try {
-        setStudents(JSON.parse(savedStudents) as StudentEntry[]);
+        const response = await fetch(`/api/students?sessionCode=${encodeURIComponent(sessionCode)}`);
+        const result = (await response.json()) as StudentEntry[] | { error?: string };
+
+        if (!isCurrent) {
+          return;
+        }
+        if (!response.ok) {
+          setMessage((result as { error?: string }).error ?? "Could not load this session roster.");
+          return;
+        }
+
+        setStudents(result as StudentEntry[]);
       } catch {
-        window.localStorage.removeItem(STUDENT_STORAGE_KEY);
-        setStudents([]);
+        if (isCurrent) {
+          setMessage("Could not reach shared registration storage.");
+        }
       }
     }
-  }, []);
 
-  useEffect(() => {
-    const handleStorage = () => {
-      const storedSessions = getSessionsFromStorage();
-
-      if (storedSessions.length > 0) {
-        setSessions(storedSessions);
-        const savedActiveId = window.localStorage.getItem(ACTIVE_SESSION_KEY) ?? storedSessions[0].id;
-        const selectedSession = storedSessions.find((item) => item.id === savedActiveId) ?? storedSessions[0];
-        setActiveSessionId(selectedSession.id);
-        setSessionName(selectedSession.name);
-        setSeatCount(selectedSession.seatCount);
-        setSessionCode(selectedSession.code);
-      }
-
-      const savedStudents = window.localStorage.getItem(STUDENT_STORAGE_KEY);
-      setStudents(savedStudents ? (JSON.parse(savedStudents) as StudentEntry[]) : []);
-    };
-
-    window.addEventListener("storage", handleStorage);
+    void refreshStudents();
+    const refreshTimer = window.setInterval(refreshStudents, 5000);
 
     return () => {
-      window.removeEventListener("storage", handleStorage);
+      isCurrent = false;
+      window.clearInterval(refreshTimer);
     };
-  }, []);
+  }, [sessionCode]);
 
-  function handleCreateSession(event: FormEvent<HTMLFormElement>) {
+  async function handleCreateSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedSessionName = sessionName.trim() || "Beta 2026";
     const cleanedSeatCount = Math.max(1, Number(seatCount) || 30);
-    const nextSession: SessionRecord = {
-      id: Date.now().toString(),
-      name: trimmedSessionName,
-      code: generateCode(),
-      seatCount: cleanedSeatCount,
-      createdAt: new Date().toISOString(),
-    };
+    let createdSession: SessionRecord | null = null;
 
-    const updatedSessions = [...sessions, nextSession];
-    window.localStorage.setItem(SESSIONS_KEY, JSON.stringify(updatedSessions));
-    window.localStorage.setItem(ACTIVE_SESSION_KEY, nextSession.id);
-    window.localStorage.setItem(STUDENT_STORAGE_KEY, JSON.stringify([]));
-    setSessions(updatedSessions);
-    setActiveSessionId(nextSession.id);
-    setSessionName(nextSession.name);
-    setSeatCount(nextSession.seatCount);
-    setSessionCode(nextSession.code);
-    setStudents([]);
-    setMessage(
-      `Session ${trimmedSessionName} created. Share code ${nextSession.code} with students.`
-    );
+    try {
+      const response = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedSessionName, seatCount: cleanedSeatCount }),
+      });
+      const result = (await response.json()) as SessionRecord | { error?: string };
+
+      if (!response.ok) {
+        setMessage((result as { error?: string }).error ?? "Could not create this session.");
+        return;
+      }
+
+      createdSession = result as SessionRecord;
+    } catch {
+      setMessage("Could not reach shared registration storage. Check your connection and try again.");
+      return;
+    }
+
+    try {
+      const sessionList = await fetchSessionsFromApi();
+      const selectedSession = chooseSession(
+        sessionList,
+        window.localStorage.getItem(DB_ACTIVE_SESSION_KEY),
+        createdSession.id
+      );
+      setSessions(sessionList);
+      setSessionsError("");
+
+      if (!selectedSession) {
+        throw new Error("The created session was not returned by the session list.");
+      }
+
+      window.localStorage.setItem(DB_ACTIVE_SESSION_KEY, selectedSession.id);
+      setActiveSessionId(selectedSession.id);
+      setSessionName(selectedSession.name);
+      setSeatCount(selectedSession.seatCount);
+      setSessionCode(selectedSession.code);
+      setStudents([]);
+      setMessage(`Session ${trimmedSessionName} created. Share code ${createdSession.code} with students.`);
+    } catch (error) {
+      setSessionsError(
+        `Session was created, but the session list could not be refreshed. ${
+          error instanceof Error ? error.message : "Check your connection and try again."
+        }`
+      );
+    }
   }
 
   function selectSession(sessionId: string) {
@@ -182,7 +223,7 @@ export default function TeacherPage() {
       return;
     }
 
-    window.localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+    window.localStorage.setItem(DB_ACTIVE_SESSION_KEY, sessionId);
     setActiveSessionId(sessionId);
     setSessionName(selected.name);
     setSeatCount(selected.seatCount);
@@ -190,9 +231,21 @@ export default function TeacherPage() {
     setMessage(`Viewing session ${selected.name}.`);
   }
 
+  async function handleLogout() {
+    const { error } = await createClient().auth.signOut();
+
+    if (error) {
+      setMessage("Could not log out. Please try again.");
+      return;
+    }
+
+    router.replace("/teacher/login");
+    router.refresh();
+  }
+
   const currentSessionStudents = students.filter((student) => student.sessionCode === sessionCode);
   const filledSeats = currentSessionStudents.length;
-  const remainingSeats = Math.max(seatCount - filledSeats, 0);
+  const remainingSeats = activeSessionId ? Math.max(seatCount - filledSeats, 0) : 0;
 
   return (
     <main className="min-h-screen bg-[var(--brand-navy-deep)] text-[var(--brand-ivory)]">
@@ -200,19 +253,29 @@ export default function TeacherPage() {
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-              Teacher Dashboard
+              Money Moves · Teacher Dashboard
             </p>
             <h1 className="mt-2 text-3xl font-black text-white sm:text-4xl">
               Beta Session Control
             </h1>
           </div>
 
-          <Link
-            href="/"
-            className="rounded-xl border border-[var(--brand-gold)]/60 bg-[var(--brand-navy)] px-4 py-2 font-bold text-[var(--brand-ivory)] transition hover:bg-[var(--brand-navy)]/80"
-          >
-            Back to Home
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <span className="text-sm text-[var(--brand-ivory)]/80">Signed in as {teacherName}</span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-xl border border-[var(--brand-gold)]/60 bg-[var(--brand-navy)] px-4 py-2 font-bold text-[var(--brand-ivory)] transition hover:bg-[var(--brand-navy)]/80"
+            >
+              Log Out
+            </button>
+            <Link
+              href="/"
+              className="rounded-xl border border-[var(--brand-gold)]/60 bg-[var(--brand-navy)] px-4 py-2 font-bold text-[var(--brand-ivory)] transition hover:bg-[var(--brand-navy)]/80"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -220,7 +283,9 @@ export default function TeacherPage() {
             <div className="text-sm uppercase tracking-[0.2em] text-[var(--brand-gold)]/80">
               Session Name
             </div>
-            <div className="mt-3 text-2xl font-black text-white">{sessionName}</div>
+            <div className="mt-3 text-2xl font-black text-white">
+              {activeSessionId ? sessionName : "No session selected"}
+            </div>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
@@ -241,7 +306,7 @@ export default function TeacherPage() {
             <div className="text-sm uppercase tracking-[0.2em] text-[var(--brand-gold)]/80">
               Total Seats
             </div>
-            <div className="mt-3 text-3xl font-black text-white">{seatCount}</div>
+            <div className="mt-3 text-3xl font-black text-white">{activeSessionId ? seatCount : 0}</div>
           </div>
         </section>
 
@@ -259,6 +324,11 @@ export default function TeacherPage() {
                 onChange={(event) => selectSession(event.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-[var(--brand-navy)] px-4 py-3 text-white outline-none transition focus:border-[var(--brand-gold)]"
               >
+                {sessions.length === 0 ? (
+                  <option value="" disabled>
+                    No saved sessions yet
+                  </option>
+                ) : null}
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name}
@@ -266,6 +336,12 @@ export default function TeacherPage() {
                 ))}
               </select>
             </div>
+
+            {sessionsError ? (
+              <div className="mb-5 rounded-xl border border-red-400/50 bg-red-950/40 p-4 text-sm text-red-100">
+                {sessionsError}
+              </div>
+            ) : null}
 
             <form onSubmit={handleCreateSession} className="space-y-5">
               <div>
@@ -335,7 +411,7 @@ export default function TeacherPage() {
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-xl font-black text-white">Student Roster</h2>
             <span className="rounded-full border border-[var(--brand-gold)]/50 bg-[var(--brand-gold)]/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.15em] text-[var(--brand-gold)]">
-              {sessionName}
+              {activeSessionId ? sessionName : "No session selected"}
             </span>
           </div>
 

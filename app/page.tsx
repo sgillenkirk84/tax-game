@@ -10,7 +10,7 @@ export default function Home() {
           </p>
 
           <h1 className="text-5xl font-black tracking-tight text-[var(--brand-navy)] sm:text-7xl">
-            My Tax Life
+            Money Moves
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[var(--brand-navy)]/80">

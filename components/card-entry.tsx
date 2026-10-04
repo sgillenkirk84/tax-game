@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
   type CardCategory,
   type CardPreview,
@@ -23,9 +23,9 @@ const saveEnabled = process.env.NEXT_PUBLIC_CARD_SAVE_ENABLED === "true";
 const money = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-// Students draw physical cards and type the printed ID. The server validates
-// the ID against the approved dataset. Saving is a separate, confirmed step that
-// the server re-validates; the browser never supplies amounts or effects.
+// Students draw physical cards, then pick the matching card from the approved
+// deck. The server supplies the list and re-validates the card on save; the
+// browser never supplies amounts or effects, and nothing is drawn at random.
 export default function CardEntry({
   round,
   stage,
@@ -35,41 +35,51 @@ export default function CardEntry({
   onVerified,
   onSaved,
 }: CardEntryProps) {
-  const [cardId, setCardId] = useState("");
-  const [checking, setChecking] = useState(false);
+  const [cards, setCards] = useState<CardPreview[] | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [card, setCard] = useState<CardPreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  // One key per previewed card, reused on retries so a repeated save is safe.
+  // One key per selected card, reused on retries so a repeated save is safe.
   const idempotencyKey = useRef<string | null>(null);
 
-  async function lookup(event: React.FormEvent) {
-    event.preventDefault();
-    if (!cardId.trim() || checking || saving || saved) {
-      return;
-    }
-    setChecking(true);
-    setError("");
-    setCard(null);
-    idempotencyKey.current = null;
+  const loadCards = useCallback(async () => {
+    startTransition(() => {
+      setCards(null);
+      setLoadError("");
+    });
     try {
-      const response = await fetch("/api/rounds/card-preview", {
+      const response = await fetch("/api/rounds/card-options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: player.id, resumeToken: player.resumeToken, cardId, round, stage, expectedCategory }),
+        body: JSON.stringify({ id: player.id, resumeToken: player.resumeToken, round, stage }),
       });
-      const result = (await response.json()) as { card?: CardPreview; error?: string };
-      if (!response.ok || !result.card) {
-        throw new Error(result.error ?? "Could not look up that card.");
+      const result = (await response.json()) as { category?: string; cards?: CardPreview[]; error?: string };
+      if (!response.ok || !Array.isArray(result.cards) || result.category !== expectedCategory) {
+        throw new Error(result.error ?? "Could not load the cards.");
       }
-      setCard(result.card);
-      onVerified?.(result.card);
+      const list = result.cards;
+      startTransition(() => setCards(list));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not look up that card.");
-    } finally {
-      setChecking(false);
+      const message = caught instanceof Error ? caught.message : "Could not load the cards.";
+      startTransition(() => setLoadError(message));
     }
+  }, [player.id, player.resumeToken, round, stage, expectedCategory]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadCards(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCards]);
+
+  function select(next: CardPreview) {
+    if (saving || saved) {
+      return;
+    }
+    setError("");
+    setCard(next);
+    idempotencyKey.current = null;
+    onVerified?.(next);
   }
 
   async function save() {
@@ -111,36 +121,48 @@ export default function CardEntry({
       <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-gold)]">
         Round {round} · {expectedCategory} card
       </p>
-      <p className="mt-2 text-sm text-[var(--brand-navy)]/75">{instructions ?? stageInstructions[stage]}</p>
+      <p className="mt-2 text-sm text-[var(--brand-navy)]/75">
+        {instructions ?? stageInstructions[stage]} Then tap the card that matches the one in your hand.
+      </p>
 
-      <form onSubmit={lookup} className="mt-4 flex flex-wrap gap-3">
-        <label className="sr-only" htmlFor="card-id-input">
-          {expectedCategory} card ID
-        </label>
-        <input
-          id="card-id-input"
-          value={cardId}
-          onChange={(event) => {
-            setCardId(event.target.value);
-            setCard(null);
-            idempotencyKey.current = null;
-          }}
-          disabled={saved}
-          maxLength={40}
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          placeholder="Card ID, e.g. INC-W2-001"
-          className="min-w-0 flex-1 rounded-xl border border-[var(--brand-navy)]/30 px-4 py-3 font-mono uppercase"
-        />
-        <button
-          type="submit"
-          disabled={checking || saving || saved || !cardId.trim()}
-          className="rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white disabled:opacity-50"
-        >
-          {checking ? "Checking..." : "Look up card"}
-        </button>
-      </form>
+      {loadError ? (
+        <div role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => void loadCards()} className="mt-2 underline">
+            Try again
+          </button>
+        </div>
+      ) : cards === null ? (
+        <p className="mt-4 text-sm text-[var(--brand-navy)]/70">Loading cards...</p>
+      ) : (
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2" aria-label={`${expectedCategory} cards`}>
+          {cards.map((option) => {
+            const selected = card?.id === option.id;
+            return (
+              <li key={option.id}>
+                <button
+                  type="button"
+                  onClick={() => select(option)}
+                  disabled={saving || saved}
+                  aria-pressed={selected}
+                  className={`flex h-full w-full flex-col rounded-xl border p-3 text-left disabled:opacity-60 ${
+                    selected
+                      ? "border-[var(--brand-gold)] bg-[var(--brand-gold)]/15 ring-2 ring-[var(--brand-gold)]"
+                      : "border-[var(--brand-navy)]/20 bg-white"
+                  }`}
+                >
+                  <span className="text-sm font-black">{option.name}</span>
+                  <span className="mt-1 text-base leading-snug">{option.description}</span>
+                  {option.amount !== null ? (
+                    <span className="mt-2 text-lg font-black">{money(option.amount)}</span>
+                  ) : null}
+                  <span className="mt-2 font-mono text-[11px] text-[var(--brand-navy)]/50">{option.id}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {error ? (
         <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
@@ -192,6 +214,7 @@ export default function CardEntry({
             </p>
           )}
         </div>
-      ) : null}    </section>
+      ) : null}
+    </section>
   );
 }

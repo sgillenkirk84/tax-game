@@ -22,6 +22,22 @@ export type CardLookupResult =
   | { ok: true; card: CardPreview }
   | { ok: false; reason: "not-found" | "wrong-category"; actualCategory?: string };
 
+function toPreview(card: (typeof GAME_DATA.cards)[number], expectedCategory: CardCategory): CardPreview {
+  return {
+    id: String(card.id),
+    name: text(card.name) ?? String(card.id),
+    category: expectedCategory,
+    subcategory: text(card.subcategory),
+    description: text(card.description) ?? "",
+    amount: typeof card.amount === "number" ? card.amount : null,
+    taxCategory: text(card.taxCategory),
+    educationMessage: text(card.educationMessage),
+    roundRule: text(card.roundRule),
+    pathwayRule: text(card.pathwayRule),
+    playerChoiceRequired: card.playerChoiceRequired === "Yes",
+  };
+}
+
 // Looks up an active approved card and checks it belongs to the expected deck.
 export function lookupCard(cardId: string, expectedCategory: CardCategory): CardLookupResult {
   const card = getIndex().get(cardId);
@@ -31,20 +47,12 @@ export function lookupCard(cardId: string, expectedCategory: CardCategory): Card
   if (card.deck !== expectedCategory) {
     return { ok: false, reason: "wrong-category", actualCategory: text(card.deck) ?? undefined };
   }
-  return {
-    ok: true,
-    card: {
-      id: String(card.id),
-      name: text(card.name) ?? String(card.id),
-      category: expectedCategory,
-      subcategory: text(card.subcategory),
-      description: text(card.description) ?? "",
-      amount: typeof card.amount === "number" ? card.amount : null,
-      taxCategory: text(card.taxCategory),
-      educationMessage: text(card.educationMessage),
-      roundRule: text(card.roundRule),
-      pathwayRule: text(card.pathwayRule),
-      playerChoiceRequired: card.playerChoiceRequired === "Yes",
-    },
-  };
+  return { ok: true, card: toPreview(card, expectedCategory) };
+}
+
+// Every active approved card in a deck, in dataset order. Nothing is randomized.
+export function listDeckCards(expectedCategory: CardCategory): CardPreview[] {
+  return [...getIndex().values()]
+    .filter((card) => card.deck === expectedCategory)
+    .map((card) => toPreview(card, expectedCategory));
 }

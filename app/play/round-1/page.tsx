@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import CardEntry from "@/components/card-entry";
+import { roundHeading } from "@/lib/card-entry";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
 type RoundOne = {
@@ -162,7 +163,7 @@ export default function RoundOnePage() {
       <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
         Round {round.roundNumber} of {round.totalRounds}
       </p>
-      <h1 className="mt-3 text-3xl font-black">Welcome to Round 1</h1>
+      <h1 className="mt-3 text-3xl font-black">{roundHeading(round.roundNumber)}</h1>
       <dl className="mt-6 space-y-4">
         <div className="rounded-2xl border border-[var(--brand-navy)]/15 p-4">
           <dt className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">Your pathway</dt>

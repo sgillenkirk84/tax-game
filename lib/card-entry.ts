@@ -40,6 +40,19 @@ export const stageInstructions: Record<CardStage, string> = {
   "audit-if-triggered": "Your teacher will tell you if an audit applies. Draw an Audit Result card and type its ID.",
 };
 
+// Student-facing heading for each of the five rounds.
+export const ROUND_HEADINGS: Record<number, string> = {
+  1: "Starting Out",
+  2: "Finding Your Feet",
+  3: "Building Your Future",
+  4: "Major Life Decisions",
+  5: "Looking Ahead",
+};
+
+export function roundHeading(round: number): string {
+  return ROUND_HEADINGS[round] ?? `Round ${round}`;
+}
+
 export function isCardStage(value: unknown): value is CardStage {
   return typeof value === "string" && (CARD_STAGES as readonly string[]).includes(value);
 }

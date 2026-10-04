@@ -768,6 +768,14 @@ export default function StudentGamePage() {
                 {readyForNextStep ? (
                   <div className="rounded-2xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-4 text-sm font-semibold text-[var(--brand-navy)]">
                     Starting setup complete. This player is ready to proceed to the next game phase.
+                    {process.env.NEXT_PUBLIC_ROUND_ONE_ENABLED === "true" ? (
+                      <Link
+                        href="/play/round-1"
+                        className="mt-4 flex w-fit rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
+                      >
+                        Start Round 1
+                      </Link>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import CardEntry from "@/components/card-entry";
+import RoundDashboard from "@/components/round-dashboard";
 import { roundHeading } from "@/lib/card-entry";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
@@ -189,13 +189,8 @@ export default function RoundOnePage() {
           </div>
         </div>
       </dl>
-      {process.env.NEXT_PUBLIC_CARD_ENTRY_ENABLED === "true" && player && round.currentStage === "income-or-retirement" ? (
-        <CardEntry
-          round={round.roundNumber}
-          stage="income-or-retirement"
-          player={player}
-          expectedCategory="Income"
-        />
+      {process.env.NEXT_PUBLIC_CARD_ENTRY_ENABLED === "true" && player ? (
+        <RoundDashboard round={round.roundNumber} pathwayId={round.pathwayId} player={player} />
       ) : (
         <p className="mt-6 text-sm text-[var(--brand-navy)]/70">Card entry for this round is coming soon.</p>
       )}

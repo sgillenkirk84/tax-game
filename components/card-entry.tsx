@@ -18,6 +18,9 @@ type CardEntryProps = {
   instructions?: string;
   onVerified?: (card: CardPreview) => void;
   onSaved?: (card: CardPreview) => void;
+  // Reports whether the stage's card has been saved (now or earlier), so a
+  // parent can offer a separate Continue action.
+  onSavedChange?: (saved: boolean) => void;
 };
 
 const saveEnabled = process.env.NEXT_PUBLIC_CARD_SAVE_ENABLED === "true";
@@ -36,6 +39,7 @@ export default function CardEntry({
   instructions,
   onVerified,
   onSaved,
+  onSavedChange,
 }: CardEntryProps) {
   const [cards, setCards] = useState<CardPreview[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -46,6 +50,9 @@ export default function CardEntry({
   const [limitReached, setLimitReached] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const saved = limitReached || justSaved;
+  useEffect(() => {
+    onSavedChange?.(saved);
+  }, [saved, onSavedChange]);
   // One key per selected card, reused on retries so a repeated save is safe.
   const idempotencyKey = useRef<string | null>(null);
 
@@ -158,7 +165,7 @@ export default function CardEntry({
         <div className="mt-4 rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-5">
           {saved ? (
             <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
-              Card saved. Wait for your teacher before moving on.
+              Card saved. This is the card recorded for this stage.
             </p>
           ) : (
             <p className="mb-2 text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">

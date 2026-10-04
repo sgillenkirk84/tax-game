@@ -5,6 +5,7 @@ type RoundOneRow = {
   pathway_id: string;
   starting_decision_id: string;
   round_status: string;
+  round_current_stage: string;
   beginning_cash_resources: number | string;
   beginning_student_loan_debt: number | string;
 };
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
       pathwayId: row.pathway_id,
       scenarioId: row.starting_decision_id,
       roundStatus: row.round_status,
+      currentStage: row.round_current_stage,
       roundNumber: 1,
       totalRounds: 5,
       startingCash: Number(row.beginning_cash_resources),

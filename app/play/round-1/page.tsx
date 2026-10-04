@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import CardEntry from "@/components/card-entry";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
 type RoundOne = {
   pathwayId: string;
   scenarioId: string;
+  currentStage?: string;
   startingCash: number;
   startingStudentLoanDebt: number;
   roundNumber: number;
@@ -57,6 +59,7 @@ export default function RoundOnePage() {
   const [state, setState] = useState<"loading" | "ready" | "error" | "nosession">("loading");
   const [error, setError] = useState("");
   const [round, setRound] = useState<RoundOne | null>(null);
+  const [player, setPlayer] = useState<{ id: string; resumeToken: string } | null>(null);
 
   const load = useCallback(async () => {
     startTransition(() => setState("loading"));
@@ -93,6 +96,7 @@ export default function RoundOnePage() {
       }
       startTransition(() => {
         setRound(result as RoundOne);
+        setPlayer({ id: id as string, resumeToken: resumeToken as string });
         setState("ready");
       });
     } catch (caught) {
@@ -184,7 +188,16 @@ export default function RoundOnePage() {
           </div>
         </div>
       </dl>
-      <p className="mt-6 text-sm text-[var(--brand-navy)]/70">Card entry for this round is coming soon.</p>
+      {process.env.NEXT_PUBLIC_CARD_ENTRY_ENABLED === "true" && player && round.currentStage === "income-or-retirement" ? (
+        <CardEntry
+          round={round.roundNumber}
+          stage="income-or-retirement"
+          player={player}
+          expectedCategory="Income"
+        />
+      ) : (
+        <p className="mt-6 text-sm text-[var(--brand-navy)]/70">Card entry for this round is coming soon.</p>
+      )}
     </Shell>
   );
 }

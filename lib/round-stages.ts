@@ -30,8 +30,11 @@ export function flowIndex(stage: string): number {
 // advance_round_stage, which remains the authority; this only decides whether
 // to offer the Continue action. Only Round 1 Income is approved so far.
 export function advanceTarget(stage: string, round: number): { stage: CardStage; label: string } | null {
-  if (stage === "income-or-retirement" && round === 1) {
+  if (round === 1 && stage === "income-or-retirement") {
     return { stage: "life-event", label: "Life Event" };
+  }
+  if (round === 1 && stage === "life-event") {
+    return { stage: "wildcard", label: "Wildcard" };
   }
   return null;
 }

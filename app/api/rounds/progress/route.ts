@@ -1,11 +1,11 @@
-import { expectedCategoryFor, isCardStage, type CardPreview, type CardStage } from "@/lib/card-entry";
+import { expectedCategoryFor, isCardStage, recordedChoiceFrom, type CardPreview, type CardStage } from "@/lib/card-entry";
 import { lookupCard } from "@/lib/card-lookup";
 import { loadRoundState } from "@/lib/round-state";
 import { ROUND_FLOW } from "@/lib/round-stages";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
 
-type ProgressRow = { card_id: string; stage: string; order_in_stage: number };
+type ProgressRow = { card_id: string; stage: string; order_in_stage: number; choices: unknown };
 
 // Authenticated, read-only dashboard state: the current stage from the
 // database and the cards already saved in each stage of the current round.
@@ -61,7 +61,8 @@ export async function POST(request: Request) {
         const category = expectedCategoryFor(row.stage, state.pathway_id, state.life_current_round);
         const found = lookupCard(row.card_id, category);
         if (found.ok) {
-          saved.set(row.stage, [...(saved.get(row.stage) ?? []), found.card]);
+          const card = { ...found.card, recordedChoice: recordedChoiceFrom(row.card_id, row.choices) };
+          saved.set(row.stage, [...(saved.get(row.stage) ?? []), card]);
         }
       }
     }

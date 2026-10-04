@@ -35,6 +35,7 @@ function toPreview(card: (typeof GAME_DATA.cards)[number], expectedCategory: Car
     roundRule: text(card.roundRule),
     pathwayRule: text(card.pathwayRule),
     playerChoiceRequired: card.playerChoiceRequired === "Yes",
+    triggersAudit: card.auditRisk === "Trigger",
   };
 }
 

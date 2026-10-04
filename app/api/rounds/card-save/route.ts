@@ -1,6 +1,7 @@
 import {
   cardIdPattern,
   isCardStage,
+  isValidCardChoice,
   normalizeCardId,
 } from "@/lib/card-entry";
 import { readStudentCredentials } from "@/lib/student-credentials";
@@ -25,6 +26,7 @@ const rpcErrors: Array<[string, number, string]> = [
   ["NOT_CURRENT_STAGE", 409, "That is not the current stage of your round."],
   ["STAGE_NOT_SUPPORTED", 409, "Saving cards is not available for this stage yet."],
   ["STAGE_CARD_LIMIT_REACHED", 409, "A card has already been saved for this stage."],
+  ["INVALID_CHOICE", 400, "Choose one of the options before saving this card."],
   ["CARD_NOT_FOUND", 422, "That card ID was not found. Check the ID printed on your card."],
   ["CARD_WRONG_DECK", 422, "That card is from a different deck. Draw from the deck for this stage."],
   ["IDEMPOTENCY_KEY_REUSED", 409, "This save request was already used for a different card. Try again."],
@@ -68,6 +70,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Card IDs use letters, numbers and dashes, like INC-W2-001." }, { status: 400 });
   }
 
+  // Only a known string choice is accepted, and only for cards that need one.
+  const choice = typeof body.choice === "string" ? body.choice : null;
+  if ((body.choice !== undefined && body.choice !== null && choice === null) || !isValidCardChoice(cardId, choice)) {
+    return Response.json({ error: "Choose one of the options before saving this card." }, { status: 400 });
+  }
+
   const supabase = createStudentSupabaseClient();
   if (!supabase) {
     return Response.json({ error: "Student progress storage is not configured yet." }, { status: 503 });
@@ -82,6 +90,8 @@ export async function POST(request: Request) {
       p_expected_deck: body.expectedCategory,
       p_card_id: cardId,
       p_idempotency_key: body.idempotencyKey.toLowerCase(),
+      // Omitted when there is no choice, so Income and Life Event calls are unchanged.
+      ...(choice === null ? {} : { p_choice: choice }),
     });
 
     if (error) {

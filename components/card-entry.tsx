@@ -6,6 +6,8 @@ import {
   type CardPreview,
   type CardSection,
   type CardStage,
+  choiceConfigFor,
+  choiceLabel,
   sectionsFor,
   stageInstructions,
 } from "@/lib/card-entry";
@@ -45,6 +47,7 @@ export default function CardEntry({
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [card, setCard] = useState<CardPreview | null>(null);
+  const [choice, setChoice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedCards, setSavedCards] = useState<CardPreview[]>([]);
   const [limitReached, setLimitReached] = useState(false);
@@ -102,12 +105,13 @@ export default function CardEntry({
     }
     setError("");
     setCard(next);
+    setChoice(null);
     idempotencyKey.current = null;
     onVerified?.(next);
   }
 
   async function save() {
-    if (!card || saving || saved) {
+    if (!card || saving || saved || (choiceConfigFor(card.id) && !choice)) {
       return;
     }
     setSaving(true);
@@ -121,6 +125,7 @@ export default function CardEntry({
           id: player.id,
           resumeToken: player.resumeToken,
           cardId: card.id,
+          choice: choiceConfigFor(card.id) ? choice : undefined,
           round,
           stage,
           expectedCategory,
@@ -131,7 +136,7 @@ export default function CardEntry({
       if (!response.ok || !result.saved) {
         throw new Error(result.error ?? "Could not save your card.");
       }
-      setSavedCards((current) => [...current, card]);
+      setSavedCards((current) => [...current, { ...card, recordedChoice: choice }]);
       setJustSaved(true);
       onSaved?.(card);
     } catch (caught) {
@@ -181,6 +186,16 @@ export default function CardEntry({
           {shown.educationMessage ? (
             <p className="mt-3 text-sm text-[var(--brand-navy)]/75">{shown.educationMessage}</p>
           ) : null}
+          {shown.playerChoiceRequired && !choiceConfigFor(shown.id) ? (
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              This card needs a choice from you. Choices are not recorded yet, so only the card itself is saved.
+            </p>
+          ) : null}
+          {shown.triggersAudit ? (
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              This card triggers an audit. Audit results will be handled in a later step; nothing is applied now.
+            </p>
+          ) : null}
           {shown.roundRule || shown.pathwayRule ? (
             <p className="mt-2 text-xs text-[var(--brand-navy)]/60">
               {shown.roundRule ? `Rounds: ${shown.roundRule}. ` : ""}
@@ -192,13 +207,41 @@ export default function CardEntry({
             {shown.subcategory ? ` · ${shown.subcategory}` : ""}
           </p>
 
+          {saved && shown.recordedChoice ? (
+            <p className="mt-3 text-sm font-black">
+              Your choice: {choiceLabel(shown.id, shown.recordedChoice)}
+            </p>
+          ) : null}
+          {saved ? null : choiceConfigFor(shown.id) ? (
+            <fieldset className="mt-4" disabled={saving}>
+              <legend className="text-sm font-black">{choiceConfigFor(shown.id)?.prompt}</legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {choiceConfigFor(shown.id)?.options.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={choice === option.value}
+                    onClick={() => setChoice(option.value)}
+                    className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                      choice === option.value
+                        ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white"
+                        : "border-[var(--brand-navy)]/30 bg-white"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+
           {saved ? null : saveEnabled ? (
             <div className="mt-4">
               <p className="text-sm font-semibold">Does this match the card in your hand?</p>
               <button
                 type="button"
                 onClick={() => void save()}
-                disabled={saving}
+                disabled={saving || (choiceConfigFor(shown.id) !== null && !choice)}
                 className="mt-2 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Yes, save this card"}

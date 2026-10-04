@@ -1,4 +1,5 @@
-import { expectedCategoryFor, isCardStage, stageCardLimit } from "@/lib/card-entry";
+import type { CardPreview } from "@/lib/card-entry";
+import { expectedCategoryFor, isCardStage, recordedChoiceFrom, stageCardLimit } from "@/lib/card-entry";
 import { listDeckCards, lookupCard } from "@/lib/card-lookup";
 import { loadRoundState } from "@/lib/round-state";
 import { readStudentCredentials } from "@/lib/student-credentials";
@@ -49,29 +50,29 @@ export async function POST(request: Request) {
   }
 
   const category = expectedCategoryFor(body.stage, state.pathway_id, state.life_current_round);
-  // Cards already saved for this round and stage, read through the same
-  // credential check. If the read RPC is not installed yet, show none; the save
-  // RPC still enforces the stage limit.
-  const savedCards = [];
+  // Cards already saved for this round and stage (with any recorded choice),
+  // read through the same credential check. If the read RPC is not installed
+  // yet, show none; the save RPC still enforces the stage limit.
+  const savedCards: CardPreview[] = [];
   let savedCount = 0;
   try {
-    const { data, error } = await supabase.rpc("get_round_saved_cards", {
+    const { data, error } = await supabase.rpc("get_round_progress", {
       p_player_id: credentials.playerId,
       p_resume_token_hash: credentials.resumeTokenHash,
-      p_round_number: state.life_current_round,
-      p_stage: state.round_current_stage,
     });
     if (error) {
       if (error.code !== "PGRST202" && error.code !== "42883") {
         return Response.json({ error: "Could not load your saved card." }, { status: 500 });
       }
     } else {
-      const rows = (data as { card_id: string }[] | null) ?? [];
+      const rows = ((data as { card_id: string; stage: string; order_in_stage: number; choices: unknown }[] | null) ?? [])
+        .filter((row) => row.stage === state.round_current_stage)
+        .sort((a, b) => a.order_in_stage - b.order_in_stage);
       savedCount = rows.length;
       for (const row of rows) {
         const found = lookupCard(row.card_id, category);
         if (found.ok) {
-          savedCards.push(found.card);
+          savedCards.push({ ...found.card, recordedChoice: recordedChoiceFrom(row.card_id, row.choices) });
         }
       }
     }

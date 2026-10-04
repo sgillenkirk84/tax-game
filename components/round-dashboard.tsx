@@ -2,7 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
-import { type CardPreview, expectedCategoryFor, isCardStage } from "@/lib/card-entry";
+import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage } from "@/lib/card-entry";
 import { advanceTarget, flowIndex, ROUND_FLOW } from "@/lib/round-stages";
 
 type RoundDashboardProps = {
@@ -132,6 +132,9 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                     <p className="text-sm font-black">{card.name}</p>
                     <p className="text-base leading-snug">{card.description}</p>
                     {card.amount !== null ? <p className="mt-1 text-lg font-black">{money(card.amount)}</p> : null}
+                    {card.recordedChoice ? (
+                      <p className="mt-1 text-sm font-black">Your choice: {choiceLabel(card.id, card.recordedChoice)}</p>
+                    ) : null}
                     <p className="mt-1 font-mono text-[11px] text-[var(--brand-navy)]/50">{card.id}</p>
                   </div>
                 ))}

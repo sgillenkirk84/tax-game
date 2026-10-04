@@ -36,5 +36,8 @@ export function advanceTarget(stage: string, round: number): { stage: CardStage;
   if (round === 1 && stage === "life-event") {
     return { stage: "wildcard", label: "Wildcard" };
   }
+  if (round === 1 && stage === "wildcard") {
+    return { stage: "deduction", label: "Deduction" };
+  }
   return null;
 }

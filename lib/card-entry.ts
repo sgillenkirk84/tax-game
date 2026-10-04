@@ -71,7 +71,7 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
 // Maximum cards a student may save at a stage. Mirrors record_round_card, which
 // remains the authority; this only decides whether to offer the save button.
 export function stageCardLimit(stage: CardStage, round: number): number {
-  return (stage === "income-or-retirement" || stage === "life-event" || stage === "wildcard") && round === 1 ? 1 : 0;
+  return (stage === "income-or-retirement" || stage === "life-event" || stage === "wildcard" || stage === "deduction") && round === 1 ? 1 : 0;
 }
 
 export type CardSection = { heading: string | null; subcategory: string | null; note?: string };

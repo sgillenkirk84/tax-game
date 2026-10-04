@@ -175,7 +175,9 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
                     ) : (
-                      <p className="text-sm text-[var(--brand-navy)]/70">The next stage is coming soon.</p>
+                      <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+                        {target ? "The next stage is coming soon." : `${label} complete. Your teacher will let you know when the next step opens.`}
+                      </p>
                     )}
                   </div>
                 ) : null}

@@ -32,12 +32,12 @@ const stageCategories: Record<Exclude<CardStage, "income-or-retirement">, CardCa
 };
 
 export const stageInstructions: Record<CardStage, string> = {
-  "income-or-retirement": "Shuffle the deck, draw one card, and type the card ID printed on it.",
-  "life-event": "Shuffle the Life Event deck, draw one card, and type the card ID printed on it.",
-  wildcard: "Shuffle the Wildcard deck, draw one card, and type the card ID printed on it.",
-  deduction: "Shuffle the Deduction deck, draw one card, and type the card ID printed on it.",
-  "tax-prepayment": "Shuffle the Tax Prepayment deck, draw one card, and type the card ID printed on it.",
-  "audit-if-triggered": "Your teacher will tell you if an audit applies. Draw an Audit Result card and type its ID.",
+  "income-or-retirement": "Shuffle the deck, draw one card, and select the card that matches the one in your hand.",
+  "life-event": "Shuffle the Life Event deck, draw one card, and select the card that matches the one in your hand.",
+  wildcard: "Shuffle the Wildcard deck, draw one card, and select the card that matches the one in your hand.",
+  deduction: "Shuffle the Deduction deck, draw one card, and select the card that matches the one in your hand.",
+  "tax-prepayment": "Shuffle the Tax Prepayment deck, draw one card, and select the card that matches the one in your hand.",
+  "audit-if-triggered": "Your teacher will tell you if an audit applies. Draw an Audit Result card and select the matching card.",
 };
 
 // Student-facing heading for each of the five rounds.
@@ -66,6 +66,30 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
       : "Income";
   }
   return stageCategories[stage];
+}
+
+// Maximum cards a student may save at a stage. Mirrors record_round_card, which
+// remains the authority; this only decides whether to offer the save button.
+export function stageCardLimit(stage: CardStage, round: number): number {
+  return stage === "income-or-retirement" && round === 1 ? 1 : 0;
+}
+
+export type CardSection = { heading: string | null; subcategory: string | null; note?: string };
+
+// How a deck is grouped on screen. Decks without an entry show as one list.
+const deckSections: Partial<Record<CardCategory, CardSection[]>> = {
+  Income: [
+    { heading: "W-2 Jobs", subcategory: "W-2" },
+    {
+      heading: "Business Income",
+      subcategory: "Business",
+      note: "Business income may involve additional self-employment taxes. Money Moves will calculate the applicable taxes automatically.",
+    },
+  ],
+};
+
+export function sectionsFor(category: CardCategory): CardSection[] {
+  return deckSections[category] ?? [{ heading: null, subcategory: null }];
 }
 
 export function normalizeCardId(value: string): string {

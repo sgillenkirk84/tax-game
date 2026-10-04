@@ -1,5 +1,5 @@
-import { expectedCategoryFor, isCardStage } from "@/lib/card-entry";
-import { listDeckCards } from "@/lib/card-lookup";
+import { expectedCategoryFor, isCardStage, stageCardLimit } from "@/lib/card-entry";
+import { listDeckCards, lookupCard } from "@/lib/card-lookup";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
 
@@ -81,5 +81,41 @@ export async function POST(request: Request) {
   }
 
   const category = expectedCategoryFor(body.stage, state.pathway_id, state.life_current_round);
-  return Response.json({ category, cards: listDeckCards(category) });
+  // Cards already saved for this round and stage, read through the same
+  // credential check. If the read RPC is not installed yet, show none; the save
+  // RPC still enforces the stage limit.
+  const savedCards = [];
+  let savedCount = 0;
+  try {
+    const { data, error } = await supabase.rpc("get_round_saved_cards", {
+      p_player_id: credentials.playerId,
+      p_resume_token_hash: credentials.resumeTokenHash,
+      p_round_number: state.life_current_round,
+      p_stage: state.round_current_stage,
+    });
+    if (error) {
+      if (error.code !== "PGRST202" && error.code !== "42883") {
+        return Response.json({ error: "Could not load your saved card." }, { status: 500 });
+      }
+    } else {
+      const rows = (data as { card_id: string }[] | null) ?? [];
+      savedCount = rows.length;
+      for (const row of rows) {
+        const found = lookupCard(row.card_id, category);
+        if (found.ok) {
+          savedCards.push(found.card);
+        }
+      }
+    }
+  } catch {
+    return Response.json({ error: "Could not load your saved card." }, { status: 503 });
+  }
+
+  const limit = stageCardLimit(body.stage, state.life_current_round);
+  return Response.json({
+    category,
+    cards: listDeckCards(category),
+    savedCards,
+    limitReached: limit > 0 && savedCount >= limit,
+  });
 }

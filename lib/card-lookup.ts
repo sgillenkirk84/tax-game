@@ -1,5 +1,6 @@
 import { GAME_DATA } from "@/lib/game-data";
 import type { SourceValue } from "@/lib/game-data/types";
+import { formatStandardDeduction } from "@/lib/standard-deduction";
 import { type CardCategory, type CardPreview } from "@/lib/card-entry";
 
 const text = (value: SourceValue) => (typeof value === "string" && value.trim() ? value : null);
@@ -27,11 +28,11 @@ function toPreview(card: (typeof GAME_DATA.cards)[number], expectedCategory: Car
     id: String(card.id),
     name: text(card.name) ?? String(card.id),
     category: expectedCategory,
-    subcategory: text(card.subcategory),
-    description: text(card.description) ?? "",
+    subcategory: formatStandardDeduction(text(card.subcategory), text(card.deck)),
+    description: formatStandardDeduction(text(card.description), text(card.deck)) ?? "",
     amount: typeof card.amount === "number" ? card.amount : null,
     taxCategory: text(card.taxCategory),
-    educationMessage: text(card.educationMessage),
+    educationMessage: formatStandardDeduction(text(card.educationMessage), text(card.deck)),
     roundRule: text(card.roundRule),
     pathwayRule: text(card.pathwayRule),
     playerChoiceRequired: card.playerChoiceRequired === "Yes",

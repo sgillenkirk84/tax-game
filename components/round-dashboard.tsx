@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
 import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage } from "@/lib/card-entry";
+import { STANDARD_DEDUCTION_NOTE, showsStandardDeduction } from "@/lib/standard-deduction";
 import { advanceTarget, flowIndex, ROUND_FLOW } from "@/lib/round-stages";
 
 type RoundDashboardProps = {
@@ -111,6 +112,11 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
   const currentIndex = flowIndex(stage);
   const target = advanceTarget(stage, round);
   const cardsFor = (id: string) => progress.stages.find((entry) => entry.stage === id)?.cards ?? [];
+  const completedNeedsNote = ROUND_FLOW.some(
+    (step, index) =>
+      index < currentIndex &&
+      cardsFor(step.id).some((card) => showsStandardDeduction(card.description, card.subcategory)),
+  );
   const labelFor = (id: (typeof ROUND_FLOW)[number]["id"], fallback: string) =>
     isCardStage(id) && id === "income-or-retirement" ? expectedCategoryFor(id, pathwayId, round) : fallback;
 
@@ -152,6 +158,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                     player={player}
                     expectedCategory={expectedCategoryFor(step.id, pathwayId, round)}
                     onSavedChange={setCurrentSaved}
+                    hideStandardDeductionNote={completedNeedsNote}
                   />
                 ) : (
                   <p className="rounded-2xl border border-[var(--brand-navy)]/15 p-4 text-sm">
@@ -195,6 +202,9 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
           );
         })}
       </ol>
+      {completedNeedsNote ? (
+        <p className="mt-4 text-xs leading-snug text-[var(--brand-navy)]/70">{STANDARD_DEDUCTION_NOTE}</p>
+      ) : null}
     </div>
   );
 }

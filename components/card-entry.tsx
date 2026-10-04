@@ -1,5 +1,6 @@
 "use client";
 
+import { STANDARD_DEDUCTION_NOTE, showsStandardDeduction } from "@/lib/standard-deduction";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
   type CardCategory,
@@ -13,6 +14,8 @@ import {
 } from "@/lib/card-entry";
 
 type CardEntryProps = {
+  // Set when a parent already shows the standard-deduction note on this screen.
+  hideStandardDeductionNote?: boolean;
   round: number;
   stage: CardStage;
   expectedCategory: CardCategory;
@@ -42,6 +45,7 @@ export default function CardEntry({
   onVerified,
   onSaved,
   onSavedChange,
+  hideStandardDeductionNote = false,
 }: CardEntryProps) {
   const [cards, setCards] = useState<CardPreview[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -148,6 +152,10 @@ export default function CardEntry({
 
   const shown = saved ? (savedCards.length > 0 ? savedCards[savedCards.length - 1] : card) : card;
   const sections: CardSection[] = sectionsFor(expectedCategory);
+  const needsStandardDeductionNote =
+    !hideStandardDeductionNote &&
+    (showsStandardDeduction(shown?.description, shown?.educationMessage, shown?.subcategory) ||
+      (!saved && (cards ?? []).some((option) => showsStandardDeduction(option.description, option.subcategory))));
 
   return (
     <section className="mt-8 rounded-2xl border border-[var(--brand-navy)]/15 p-5">
@@ -318,6 +326,9 @@ export default function CardEntry({
           })}
         </div>
       )}
+      {needsStandardDeductionNote ? (
+        <p className="mt-4 text-xs leading-snug text-[var(--brand-navy)]/70">{STANDARD_DEDUCTION_NOTE}</p>
+      ) : null}
     </section>
   );
 }

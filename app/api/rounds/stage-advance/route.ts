@@ -20,6 +20,7 @@ const rpcErrors: Array<[string, number, string]> = [
   ["STAGE_CARDS_INCOMPLETE", 409, "Save all of your cards for this stage before you continue."],
   ["IDEMPOTENCY_KEY_REUSED", 409, "This request was already used for something else. Try again."],
   ["TAX_CALCULATION_REQUIRED", 409, "Calculate your taxes before moving on to Tax Prepayment."],
+  ["PREPAYMENT_REQUIRED", 409, "Finish your Tax Prepayment before moving on to Results."],
 ];
 
 // Authenticated, idempotent stage advance. The browser sends only the round,
@@ -65,6 +66,10 @@ export async function POST(request: Request) {
 
   if (body.stage === "deduction" && process.env.TAX_PREPAYMENT_ENABLED !== "true") {
     return Response.json({ error: "Tax Prepayment is not available yet." }, { status: 404 });
+  }
+
+  if (body.stage === "tax-prepayment" && process.env.ROUND_RESULTS_ENABLED !== "true") {
+    return Response.json({ error: "Results are not available yet." }, { status: 404 });
   }
 
   try {

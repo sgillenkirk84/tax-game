@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:game-data": "node --experimental-strip-types --test lib/game-data/validate.test.mjs lib/game-calculations/calculations.test.ts lib/tax-summary.test.ts lib/tax-prepayment.test.ts"
+    "test:game-data": "node --experimental-strip-types --test lib/game-data/validate.test.mjs lib/game-calculations/calculations.test.ts lib/tax-summary.test.ts lib/tax-prepayment.test.ts lib/round-results.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

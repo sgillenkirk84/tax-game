@@ -8,6 +8,7 @@ type TaxPrepaymentProps = {
   round: number;
   player: { id: string; resumeToken: string };
   pathwayId: string;
+  onFixedChange?: (fixed: boolean) => void;
 };
 
 type Details = Record<string, { name: string; description: string }>;
@@ -19,7 +20,7 @@ const money = (value: number) =>
 // fixes the prepaid amount from the saved calculated tax and the card's rate,
 // so the browser never supplies an amount. Nothing here changes cash or settles
 // tax; the refund or amount due is a derived preview shown only once final.
-export default function TaxPrepayment({ round, player, pathwayId }: TaxPrepaymentProps) {
+export default function TaxPrepayment({ round, player, pathwayId, onFixedChange }: TaxPrepaymentProps) {
   const [state, setState] = useState<PrepaymentState | null>(null);
   const [details, setDetails] = useState<Details>({});
   const [loadError, setLoadError] = useState("");
@@ -53,6 +54,11 @@ export default function TaxPrepayment({ round, player, pathwayId }: TaxPrepaymen
       startTransition(() => setLoadError(message));
     }
   }, [player.id, player.resumeToken, round]);
+
+  const isFixed = state?.status === "fixed";
+  useEffect(() => {
+    onFixedChange?.(isFixed);
+  }, [isFixed, onFixedChange]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);

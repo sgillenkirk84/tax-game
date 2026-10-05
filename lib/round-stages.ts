@@ -22,14 +22,23 @@ export const ROUND_FLOW: readonly RoundFlowStep[] = [
   { id: "results-and-life-ledger", label: "Results and Life Ledger", kind: "results" },
 ];
 
+// Audit is intentionally omitted for now: students go from Tax Prepayment straight
+// to Results. The Audit step stays defined in ROUND_FLOW for later work.
+export const ACTIVE_ROUND_FLOW: readonly RoundFlowStep[] = ROUND_FLOW.filter(
+  (step) => step.id !== "audit-if-triggered",
+);
+
 export function flowIndex(stage: string): number {
-  return ROUND_FLOW.findIndex((step) => step.id === stage);
+  return ACTIVE_ROUND_FLOW.findIndex((step) => step.id === stage);
 }
 
 // The next persisted stage a student can be advanced to, or null. Mirrors
 // advance_round_stage, which remains the authority; this only decides whether
 // to offer the Continue action. Only Round 1 Income is approved so far.
-export function advanceTarget(stage: string, round: number): { stage: CardStage; label: string } | null {
+export function advanceTarget(
+  stage: string,
+  round: number,
+): { stage: CardStage | "results-and-life-ledger"; label: string } | null {
   if (round === 1 && stage === "income-or-retirement") {
     return { stage: "life-event", label: "Life Event" };
   }
@@ -41,6 +50,9 @@ export function advanceTarget(stage: string, round: number): { stage: CardStage;
   }
   if (round === 1 && stage === "deduction") {
     return { stage: "tax-prepayment", label: "Tax Prepayment" };
+  }
+  if (round === 1 && stage === "tax-prepayment") {
+    return { stage: "results-and-life-ledger", label: "Results and Life Ledger" };
   }
   return null;
 }

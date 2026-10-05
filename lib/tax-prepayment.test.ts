@@ -70,9 +70,14 @@ test("Tax Prepayment is one card in Round 1 and a redraw choice is accepted only
   assert.equal(isValidCardChoice("DED-001", "redraw"), false);
 });
 
-test("Deduction advances to Tax Prepayment and nothing advances past it", () => {
+test("Deduction advances to Tax Prepayment, then Results (Audit is skipped), and no further", () => {
   assert.deepEqual(advanceTarget("deduction", 1), { stage: "tax-prepayment", label: "Tax Prepayment" });
-  assert.equal(advanceTarget("tax-prepayment", 1), null);
+  assert.deepEqual(advanceTarget("tax-prepayment", 1), {
+    stage: "results-and-life-ledger",
+    label: "Results and Life Ledger",
+  });
+  assert.equal(advanceTarget("results-and-life-ledger", 1), null);
+  assert.equal(advanceTarget("tax-prepayment", 2), null);
   assert.equal(advanceTarget("deduction", 2), null);
 });
 

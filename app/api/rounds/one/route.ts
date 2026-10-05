@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { serverRoundEnabled } from "@/lib/round-limits";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
 
 type RoundOneRow = {
   pathway_id: string;
+  life_current_round?: number;
   starting_decision_id: string;
   round_status: string;
   round_current_stage: string;
@@ -68,15 +70,30 @@ export async function POST(request: Request) {
       return Response.json({ error: "Could not start Round 1." }, { status: 500 });
     }
 
+    // Later rounds: read the current round from the state RPC (absent until its migration is installed).
+    let current: RoundOneRow = { ...row, life_current_round: 1 };
+    const state = await supabase.rpc("get_current_round_state", {
+      p_player_id: body.id,
+      p_resume_token_hash: createHash("sha256").update(body.resumeToken).digest("hex"),
+    });
+    const stateRow = (state.data as RoundOneRow[] | null)?.[0];
+    if (!state.error && stateRow) {
+      current = stateRow;
+    }
+    const roundNumber = current.life_current_round ?? 1;
+    if (!serverRoundEnabled(roundNumber)) {
+      return Response.json({ error: "This round is not available yet." }, { status: 409 });
+    }
+
     return Response.json({
-      pathwayId: row.pathway_id,
-      scenarioId: row.starting_decision_id,
-      roundStatus: row.round_status,
-      currentStage: row.round_current_stage,
-      roundNumber: 1,
+      pathwayId: current.pathway_id,
+      scenarioId: current.starting_decision_id,
+      roundStatus: current.round_status,
+      currentStage: current.round_current_stage,
+      roundNumber,
       totalRounds: 5,
-      startingCash: Number(row.beginning_cash_resources),
-      startingStudentLoanDebt: Number(row.beginning_student_loan_debt),
+      startingCash: Number(current.beginning_cash_resources),
+      startingStudentLoanDebt: Number(current.beginning_student_loan_debt),
     });
   } catch {
     return Response.json({ error: "Could not reach student progress storage." }, { status: 503 });

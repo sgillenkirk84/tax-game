@@ -1,5 +1,6 @@
 import { GAME_DATA } from "@/lib/game-data";
 import { itemizedDeductionForCard } from "@/lib/game-calculations/deduction-rules";
+import { dependentActiveInRound, resolveClimberPrimary } from "@/lib/round-rules";
 import type { GameCard } from "@/lib/game-data/types";
 import {
   calculateGameTax,
@@ -9,7 +10,7 @@ import {
   type IncomeSource,
 } from "@/lib/game-calculations";
 
-// Authoritative Round 1 inputs as returned by the get_round_tax_inputs RPC.
+// Authoritative round inputs as returned by the get_round_tax_inputs RPC.
 // Nothing here comes from the browser.
 export type RoundTaxSnapshot = {
   life: {
@@ -25,6 +26,8 @@ export type RoundTaxSnapshot = {
     homeowner: boolean;
     cash_resources: number;
     student_loan_debt: number;
+    // Corporate Climber's retained primary Income card; card id only, amounts come from game data.
+    corporate_climber_primary?: { card_id: string; established_round: number } | null;
   };
   round: {
     id: string;
@@ -102,7 +105,7 @@ function incomeCategory(card: KnownCard): "w2-wages" | "business-net-income" | n
   return null;
 }
 
-// Reconstructs a student's Round 1 tax inputs from saved gameplay history and
+// Reconstructs a student's current-round tax inputs from saved gameplay history and
 // runs the approved engine. Incomplete or unsupported rounds are rejected, never guessed.
 export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSuccess | RoundTaxFailure {
   const { life, round } = snapshot;
@@ -110,14 +113,14 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   if (life.status !== "in_progress" || round.status !== "in_progress") {
     return fail("ROUND_NOT_OPEN", "This round is not open for calculation.");
   }
-  if (round.round_number !== 1 || life.current_round !== 1) {
-    return fail("ROUND_NOT_SUPPORTED", "Tax calculation is only available for Round 1.");
+  if (round.round_number < 1 || round.round_number > 3 || life.current_round !== round.round_number) {
+    return fail("ROUND_NOT_SUPPORTED", "Tax calculation is only available for Rounds 1 to 3.");
   }
   if (round.current_stage !== "deduction" || life.current_stage !== "deduction") {
     return fail("NOT_DEDUCTION_STAGE", "Tax is calculated after the Deduction stage.");
   }
   if (life.filing_status !== "SINGLE" && life.filing_status !== "MFJ") {
-    return fail("FILING_STATUS_NOT_SUPPORTED", "Head of Household has no approved Round 1 source.");
+    return fail("FILING_STATUS_NOT_SUPPORTED", "Head of Household has no approved source.");
   }
 
   // Income cards per pathway: Side Hustler exactly two; Entrepreneur one plus an optional
@@ -134,7 +137,7 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
     if (saved.length < range.min || saved.length > range.max) {
       return fail(
         "INCOMPLETE_ROUND",
-        `Round 1 needs ${range.min === range.max ? range.min : `${range.min} to ${range.max}`} saved ${deck} card(s) for this pathway (found ${saved.length}).`
+        `Round ${round.round_number} needs ${range.min === range.max ? range.min : `${range.min} to ${range.max}`} saved ${deck} card(s) for this pathway (found ${saved.length}).`
       );
     }
     for (const entry of saved) {
@@ -169,6 +172,33 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
     sources.push({ category, amount: card.amount, sourceId: card.id });
   }
 
+  // Corporate Climber: one primary income that never decreases. The higher dollar amount of
+  // this round's card and the retained card wins; the winner keeps its own tax classification.
+  let persistentUpdates: Record<string, unknown> | null = null;
+  if (life.pathway_id === "PATH-001") {
+    const drawn = findCard(incomeEntries[0].card_id)!;
+    const prior = life.corporate_climber_primary ?? null;
+    if (round.round_number > 1 && !prior) {
+      return fail("PRIMARY_INCOME_MISSING", "Corporate Climber has no saved primary income to carry forward.");
+    }
+    const priorCard = prior ? findCard(prior.card_id) : undefined;
+    if (prior && (!priorCard || typeof priorCard.amount !== "number" || !incomeCategory(priorCard))) {
+      return fail("PRIMARY_INCOME_MISSING", "Corporate Climber's saved primary income is not an approved Income card.", prior.card_id);
+    }
+    const resolved = resolveClimberPrimary(
+      { id: drawn.id, amount: drawn.amount as number },
+      priorCard && prior
+        ? { id: priorCard.id, amount: priorCard.amount as number, establishedRound: prior.established_round }
+        : null,
+      round.round_number,
+    );
+    const winner = findCard(resolved.card.id)!;
+    sources[0] = { category: incomeCategory(winner)!, amount: resolved.card.amount, sourceId: winner.id };
+    persistentUpdates = {
+      corporate_climber_primary: { card_id: winner.id, established_round: resolved.establishedRound },
+    };
+  }
+
   // Recurring income from investments already active before this round.
   const recurring = snapshot.investments.filter(
     (investment) =>
@@ -193,9 +223,10 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
     .filter(
       (effect) =>
         effect.effect_type === "add-dependent" &&
-        effect.status === "active" &&
-        effect.starts_round <= round.round_number &&
-        (effect.expires_after_round === null || effect.expires_after_round >= round.round_number)
+        dependentActiveInRound(
+          { status: effect.status, startsRound: effect.starts_round, expiresAfterRound: effect.expires_after_round },
+          round.round_number,
+        )
     )
     .map((effect) => ({
       sourceCardId: effect.source_card_id,
@@ -244,7 +275,13 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
     default:
       return fail("UNSUPPORTED_LIFE_EVENT", `Life Event ${lifeCard.id} has no approved calculation rule.`, lifeCard.id);
   }
-  const activeDependents = removedDependent ? dependents.slice(1) : [...dependents, ...newDependents];
+  const effectDependents = removedDependent ? dependents.slice(1) : [...dependents, ...newDependents];
+  // Caregiver's permanent dependent is derived, never stored as an effect, so Life Events
+  // (which only touch effect dependents) can never reduce a Caregiver below one.
+  const activeDependents: ActiveDependent[] =
+    life.pathway_id === "PATH-003"
+      ? [...effectDependents, { sourceCardId: "PATH-003", category: "non-credit" }]
+      : effectDependents;
   if (newDependents.length > 0) {
     stateChanges.dependents_added = newDependents;
   }
@@ -396,6 +433,7 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
     },
     pending_effects: pendingEffects,
     pending_state_changes: stateChanges,
+    persistent_updates: persistentUpdates ?? {},
     audit_trigger: {
       triggered: auditTriggered,
       source_card_id: auditTriggered ? "WILD-006" : null,

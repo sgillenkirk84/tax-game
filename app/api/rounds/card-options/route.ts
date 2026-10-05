@@ -1,3 +1,4 @@
+import { serverRoundEnabled } from "@/lib/round-limits";
 import type { CardPreview } from "@/lib/card-entry";
 import { expectedCategoryFor, isCardStage, recordedChoiceFrom, stageCardRules } from "@/lib/card-entry";
 import { listDeckCards, lookupCard } from "@/lib/card-lookup";
@@ -32,6 +33,10 @@ export async function POST(request: Request) {
     !Number.isInteger(body.round)
   ) {
     return Response.json({ error: "Invalid card entry." }, { status: 400 });
+  }
+
+  if (!serverRoundEnabled(body.round as number)) {
+    return Response.json({ error: "This round is not available yet." }, { status: 409 });
   }
 
   const supabase = createStudentSupabaseClient();

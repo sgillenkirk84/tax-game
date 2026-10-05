@@ -1,3 +1,4 @@
+import { serverRoundEnabled } from "@/lib/round-limits";
 import { isCardStage } from "@/lib/card-entry";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
     !uuidPattern.test(body.idempotencyKey)
   ) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!serverRoundEnabled(body.round as number)) {
+    return Response.json({ error: "This round is not available yet." }, { status: 409 });
   }
 
   const supabase = createStudentSupabaseClient();

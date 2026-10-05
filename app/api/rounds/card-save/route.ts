@@ -1,3 +1,4 @@
+import { serverRoundEnabled } from "@/lib/round-limits";
 import {
   cardIdPattern,
   isCardStage,
@@ -83,6 +84,10 @@ export async function POST(request: Request) {
   const choice = typeof body.choice === "string" ? body.choice : null;
   if ((body.choice !== undefined && body.choice !== null && choice === null) || !isValidCardChoice(cardId, choice)) {
     return Response.json({ error: "Choose one of the options before saving this card." }, { status: 400 });
+  }
+
+  if (!serverRoundEnabled(body.round as number)) {
+    return Response.json({ error: "This round is not available yet." }, { status: 409 });
   }
 
   const supabase = createStudentSupabaseClient();

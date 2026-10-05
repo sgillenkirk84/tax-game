@@ -1,3 +1,4 @@
+import { serverRoundEnabled } from "@/lib/round-limits";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createServiceSupabaseClient } from "@/lib/service-supabase";
 import { buildRoundTaxCalculation, type RoundTaxSnapshot } from "@/lib/round-tax";
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
     !uuidPattern.test(body.idempotencyKey)
   ) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!serverRoundEnabled(body.round as number)) {
+    return Response.json({ error: "This round is not available yet." }, { status: 409 });
   }
 
   const supabase = createServiceSupabaseClient();

@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import type { StoredResults } from "@/lib/round-results";
+import { clientMaxEnabledRound } from "@/lib/round-limits";
 
 type RoundResultsProps = {
   round: number;
@@ -9,6 +10,7 @@ type RoundResultsProps = {
   // When the progress screen could not load (a finished round), only a restore is attempted.
   restoreOnly?: boolean;
   restoreFailure?: string;
+  onRoundStarted?: () => void;
 };
 
 const pathwayNames: Record<string, string> = {
@@ -69,13 +71,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // Round Results and Life Ledger: read-only. The student finishes the round with
 // one button; the server rebuilds every amount from saved round data, applies
 // it exactly once, and returns the stored result. Reloading only restores it.
-export default function RoundResults({ round, player, restoreOnly = false, restoreFailure = "" }: RoundResultsProps) {
+export default function RoundResults({ round, player, restoreOnly = false, restoreFailure = "", onRoundStarted }: RoundResultsProps) {
   const [results, setResults] = useState<StoredResults | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
   const finishKey = useRef<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
+  const nextRound = round + 1;
+  const nextEnabled = nextRound <= clientMaxEnabledRound();
 
   const restore = useCallback(async () => {
     try {
@@ -138,6 +144,30 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
       setError(caught instanceof Error ? caught.message : "Could not finish your round.");
     } finally {
       setFinishing(false);
+    }
+  }
+
+  async function startNext() {
+    if (starting) {
+      return;
+    }
+    setStarting(true);
+    setStartError("");
+    try {
+      const response = await fetch("/api/rounds/next-round", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: player.id, resumeToken: player.resumeToken, round: nextRound }),
+      });
+      const body = (await response.json()) as { started?: boolean; error?: string };
+      if (!response.ok || !body.started) {
+        throw new Error(body.error ?? "Could not start the next round.");
+      }
+      onRoundStarted?.();
+    } catch (caught) {
+      setStartError(caught instanceof Error ? caught.message : "Could not start the next round.");
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -235,9 +265,30 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           />
         ))}
       </Section>
-      <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
-        Round {results.roundNumber} is complete. Your teacher will let you know when the next round opens.
-      </p>
+      {nextEnabled ? (
+        <div className="mt-4">
+          <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+            Round {results.roundNumber} is complete.
+          </p>
+          {startError ? (
+            <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
+              {startError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void startNext()}
+            disabled={starting}
+            className="mt-3 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white disabled:opacity-50"
+          >
+            {starting ? "Starting..." : `Start Round ${nextRound}`}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+          Round {results.roundNumber} is complete. Your teacher will let you know when the next round opens.
+        </p>
+      )}
     </section>
   );
 }

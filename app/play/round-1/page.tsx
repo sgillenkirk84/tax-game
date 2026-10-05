@@ -93,7 +93,7 @@ export default function RoundOnePage() {
         typeof result.startingCash !== "number" ||
         typeof result.startingStudentLoanDebt !== "number"
       ) {
-        throw new Error(result.error ?? "Could not start Round 1.");
+        throw new Error(result.error ?? "Could not open your round.");
       }
       startTransition(() => {
         setRound(result as RoundOne);
@@ -102,7 +102,7 @@ export default function RoundOnePage() {
       });
     } catch (caught) {
       startTransition(() => {
-        setError(caught instanceof Error ? caught.message : "Could not start Round 1.");
+        setError(caught instanceof Error ? caught.message : "Could not open your round.");
         setState("error");
       });
     }
@@ -117,7 +117,7 @@ export default function RoundOnePage() {
   if (state === "loading") {
     return (
       <Shell>
-        <h1 className="text-2xl font-black">Loading Round 1...</h1>
+        <h1 className="text-2xl font-black">Loading your round...</h1>
       </Shell>
     );
   }
@@ -139,7 +139,7 @@ export default function RoundOnePage() {
   if (state === "error" || !round) {
     return (
       <Shell>
-        <h1 className="text-2xl font-black">Could not open Round 1</h1>
+        <h1 className="text-2xl font-black">Could not open your round</h1>
         <p className="mt-3 text-[var(--brand-navy)]/75">{error}</p>
         <div className="mt-6 flex flex-wrap gap-4">
           <button
@@ -178,19 +178,25 @@ export default function RoundOnePage() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-[var(--brand-navy)]/15 p-4">
-            <dt className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">Starting cash</dt>
+            <dt className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">{round.roundNumber === 1 ? "Starting cash" : "Beginning cash"}</dt>
             <dd className="mt-1 text-2xl font-black">{money(round.startingCash)}</dd>
           </div>
           <div className="rounded-2xl border border-[var(--brand-navy)]/15 p-4">
             <dt className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">
-              Starting student-loan debt
+              {round.roundNumber === 1 ? "Starting student-loan debt" : "Beginning student-loan debt"}
             </dt>
             <dd className="mt-1 text-2xl font-black">{money(round.startingStudentLoanDebt)}</dd>
           </div>
         </div>
       </dl>
       {process.env.NEXT_PUBLIC_CARD_ENTRY_ENABLED === "true" && player ? (
-        <RoundDashboard round={round.roundNumber} pathwayId={round.pathwayId} player={player} />
+        <RoundDashboard
+          key={round.roundNumber}
+          round={round.roundNumber}
+          pathwayId={round.pathwayId}
+          player={player}
+          onRoundStarted={() => void load()}
+        />
       ) : (
         <p className="mt-6 text-sm text-[var(--brand-navy)]/70">Card entry for this round is coming soon.</p>
       )}

@@ -70,11 +70,11 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
 
 // Cards a student must save before continuing (min) and may save (max) at a
 // stage. Mirrors record_round_card and advance_round_stage, which remain the
-// authority; this only decides what to offer on screen. Round 1 only so far.
+// authority; this only decides what to offer on screen. Rounds 1 to 3; Tax Prepayment is Round 1 only.
 export type StageCardRules = { min: number; max: number };
 
 export function stageCardRules(stage: CardStage, pathwayId: string, round: number): StageCardRules {
-  if (round !== 1) {
+  if (round < 1 || round > 3 || (stage === "tax-prepayment" && round !== 1)) {
     return { min: 0, max: 0 };
   }
   if (stage === "income-or-retirement") {
@@ -92,7 +92,7 @@ export function stageCardRules(stage: CardStage, pathwayId: string, round: numbe
 
 // Pathway-specific student instructions; other stages use stageInstructions.
 export function stageInstructionsFor(stage: CardStage, pathwayId: string, round: number): string {
-  if (round === 1 && stage === "income-or-retirement") {
+  if (round >= 1 && round <= 3 && stage === "income-or-retirement") {
     if (pathwayId === "PATH-006") {
       return "Side Hustler: shuffle the Income deck and draw two cards, one at a time. Select each card that matches one in your hand and save it. Both cards count toward your income.";
     }
@@ -100,7 +100,7 @@ export function stageInstructionsFor(stage: CardStage, pathwayId: string, round:
       return "Shuffle the Income deck, draw one card, and select the card that matches the one in your hand. As an Entrepreneur you may then draw one additional Income card, but you keep it only if it is Business Income.";
     }
   }
-  if (round === 1 && stage === "life-event") {
+  if (round >= 1 && round <= 3 && stage === "life-event") {
     const base = stageInstructions[stage];
     return pathwayId === "PATH-003"
       ? `${base} Keep your permanent dependent token: Life Events can never reduce your dependents below one. If the card does not apply to you, return it to the bottom of the deck and draw again.`

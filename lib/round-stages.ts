@@ -34,18 +34,18 @@ export function flowIndex(stage: string): number {
 
 // The next persisted stage a student can be advanced to, or null. Mirrors
 // advance_round_stage, which remains the authority; this only decides whether
-// to offer the Continue action. Only Round 1 Income is approved so far.
+// to offer the Continue action. Rounds 1 to 3 run through Deduction; Prepayment and Results are Round 1 only for now.
 export function advanceTarget(
   stage: string,
   round: number,
 ): { stage: CardStage | "results-and-life-ledger"; label: string } | null {
-  if (round === 1 && stage === "income-or-retirement") {
+  if (round >= 1 && round <= 3 && stage === "income-or-retirement") {
     return { stage: "life-event", label: "Life Event" };
   }
-  if (round === 1 && stage === "life-event") {
+  if (round >= 1 && round <= 3 && stage === "life-event") {
     return { stage: "wildcard", label: "Wildcard" };
   }
-  if (round === 1 && stage === "wildcard") {
+  if (round >= 1 && round <= 3 && stage === "wildcard") {
     return { stage: "deduction", label: "Deduction" };
   }
   if (round === 1 && stage === "deduction") {

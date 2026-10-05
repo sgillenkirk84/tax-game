@@ -13,6 +13,7 @@ type RoundDashboardProps = {
   round: number;
   pathwayId: string;
   player: { id: string; resumeToken: string };
+  onRoundStarted?: () => void;
 };
 
 type Progress = {
@@ -31,7 +32,7 @@ const money = (value: number) =>
 // current stage's card selection, and compact locked future stages. Saved-card
 // records are the only source of truth, and a student moves on only by choosing
 // Continue after their card is saved.
-export default function RoundDashboard({ round, pathwayId, player }: RoundDashboardProps) {
+export default function RoundDashboard({ round, pathwayId, player, onRoundStarted }: RoundDashboardProps) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [loadError, setLoadError] = useState("");
   const [currentSaved, setCurrentSaved] = useState(false);
@@ -106,7 +107,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
   if (!progress) {
     if (loadError && resultsEnabled) {
       // A finished round no longer has an in-progress stage, so restore its saved Results instead.
-      return <RoundResults round={round} player={player} restoreOnly restoreFailure={loadError} />;
+      return <RoundResults round={round} player={player} restoreOnly restoreFailure={loadError} onRoundStarted={onRoundStarted} />;
     }
     return loadError ? (
       <div role="alert" className="mt-8 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">
@@ -143,7 +144,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
               <li key={step.id} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-green-800">Completed · {label}</p>
                 {step.kind === "automatic" ? (
-                  round === 1 ? (
+                  round >= 1 && round <= 3 ? (
                     <TaxCalculation round={round} player={player} readOnly />
                   ) : (
                     <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Calculated automatically.</p>
@@ -169,7 +170,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                 {step.id === "tax-prepayment" && prepaymentEnabled ? (
                   <TaxPrepayment round={round} player={player} pathwayId={pathwayId} onFixedChange={setPrepaymentFixed} />
                 ) : step.id === "results-and-life-ledger" && resultsEnabled ? (
-                  <RoundResults round={round} player={player} />
+                  <RoundResults round={round} player={player} onRoundStarted={onRoundStarted} />
                 ) : isCardStage(step.id) ? (
                   <CardEntry
                     key={step.id}
@@ -206,13 +207,13 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                 ) : null}
                 {currentSaved && isCardStage(step.id) && step.id !== "tax-prepayment" ? (
                   <div className="mt-4">
-                    {step.id === "deduction" && round === 1 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
+                    {step.id === "deduction" && round >= 1 && round <= 3 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
                     {advanceError ? (
                       <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
                         {advanceError}
                       </p>
                     ) : null}
-                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled)) ? (
+                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round === 1)) ? (
                       <button
                         type="button"
                         onClick={() => void advance()}
@@ -221,7 +222,13 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                       >
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
-                    ) : step.id === "deduction" ? null : (
+                    ) : step.id === "deduction" ? (
+                      taxCalculated && round > 1 ? (
+                        <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+                          Your Round {round} tax return is saved. Tax Prepayment and Results for this round are coming soon.
+                        </p>
+                      ) : null
+                    ) : (
                       <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                         {target ? "The next stage is coming soon." : `${label} complete. Your teacher will let you know when the next step opens.`}
                       </p>

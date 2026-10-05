@@ -60,8 +60,8 @@ this stage. Refresh restores the same saved card and amount.
 
 The additive `20261005120000_round_two_tax_prepayment.sql` migration must be
 reviewed and manually installed before testing the transition. Existing stage
-and prepayment flags plus the enabled-round limit still apply. Round 2 Results
-and Round 3 Tax Prepayment remain closed.
+and prepayment flags plus the enabled-round limit still apply. TASK 10.15.11
+adds Round 2 Results separately; Round 3 Tax Prepayment remains closed.
 
 ## Tax Prepayment calculation base (TASK 10.15.07)
 
@@ -93,3 +93,30 @@ pre-credit calculation rule are unchanged. $350 before credits, $350 credits
 and PRE-006 (105%) produce $368 prepaid and a $368 refund before later adjustments.
 This migration needs manual review/installation; no SQL has been executed.
 Existing fixed payments and finalized history are not changed.
+
+## Round 2 Results and Life Ledger (TASK 10.15.11)
+
+After fixed Tax Prepayment, enabled Round 2 offers Continue to Results and Life
+Ledger, then an explicit Finish Round 2. The existing finalizer re-verifies saved
+inputs, settles the fixed prepaid amount, applies the shared living-cost/debt
+rules and saved household changes once, and creates the immutable ledger snapshot.
+It never recalculates Tax Prepayment. $350 before credits, $350 credits and $368
+fixed prepayment remain $0 Calculated Tax and a $368 refund.
+
+New Results snapshots include saved deduction/tax/credit, prepayment rate, asset
+and household details. The saved tax household supplies the dependent count,
+including the Caregiver permanent dependent. Existing finalized snapshots are
+returned unchanged, including after a later round begins.
+
+The user-approved temporary beta exception bypasses triggered Audit resolution.
+No Audit tax adjustment or penalty is invented. Triggered audits remain recorded
+as unresolved in the tax snapshot and are explicitly labeled `bypassed-beta` in
+new Results/Ledger snapshots and the Results screen. This is not a resolved Audit.
+
+Review and manually install `20261005150000_round_two_results.sql` before testing.
+The function-only migration extends availability to Rounds 1-2 without replacing
+financial formulas or backfilling data. Existing feature flags and max-round
+settings still apply. Start Round 3 is offered only from finalized Results when
+Round 3 is already enabled; its existing RPC requires the prior finalized round.
+Round 3 Tax Prepayment/Results and Rounds 4-5 remain outside this milestone.
+No migration is executed by the application.

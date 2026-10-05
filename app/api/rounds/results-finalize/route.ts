@@ -1,7 +1,8 @@
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createServiceSupabaseClient } from "@/lib/service-supabase";
 import { cardNamesFor } from "@/lib/card-names";
-import { computeRoundResults, summarizeStoredResults, toFinalizePayload } from "@/lib/round-results";
+import { computeRoundResults, resultsAvailableForRound, summarizeStoredResults, toFinalizePayload } from "@/lib/round-results";
+import { serverMaxEnabledRound } from "@/lib/round-limits";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,7 +20,7 @@ const rpcErrors: Array<[string, number, string]> = [
 
 const num = (value: unknown): number => Number(value);
 
-// Finalizes Round 1. The browser sends credentials, the round and a retry key.
+// Finalizes enabled Rounds 1-2. The browser sends credentials, the round and a retry key.
 // Every amount is rebuilt from saved round data on the server and the database
 // verifies it again before changing anything. A finalized round is returned
 // unchanged, so refreshing or retrying can never apply the Results twice.
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
     !uuidPattern.test(body.idempotencyKey)
   ) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+  if (!resultsAvailableForRound(body.round, serverMaxEnabledRound())) {
+    return Response.json({ error: "Results are not available for this round yet." }, { status: 409 });
   }
 
   const supabase = createServiceSupabaseClient();

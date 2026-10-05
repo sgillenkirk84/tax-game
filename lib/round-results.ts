@@ -150,8 +150,26 @@ export type StoredResults = {
   filingStatus: string;
   homeowner: boolean;
   activeDependents: number;
+  details: {
+    adjustedGrossIncome: number;
+    deductionAmount: number;
+    deductionMethod: "standard" | "itemized";
+    taxableIncome: number;
+    taxBeforeCredits: number;
+    creditsApplied: number;
+    prepaymentRatePct: number;
+    beginningDebt: number;
+    investmentIncome: number;
+    investmentAssetValue: number;
+    auditPenalty: number;
+    auditResolution: "not-triggered" | "bypassed-beta";
+  } | null;
   cards: { stage: string; cardId: string }[];
 };
+
+export function resultsAvailableForRound(round: number, maxEnabledRound: number): boolean {
+  return Number.isInteger(round) && round >= 1 && round <= 2 && round <= maxEnabledRound;
+}
 
 const num = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -188,12 +206,40 @@ export function summarizeStoredResults(stored: unknown): StoredResults | null {
   ) {
     return null;
   }
+  let details: StoredResults["details"] = null;
+  if (r.version === 2) {
+    const values = {
+      adjustedGrossIncome: num(r.adjusted_gross_income),
+      deductionAmount: num(r.deduction_amount),
+      taxableIncome: num(r.taxable_income),
+      taxBeforeCredits: num(r.tax_before_credits),
+      creditsApplied: num(r.credits_applied),
+      prepaymentRatePct: num(r.prepayment_rate_pct),
+      beginningDebt: num(r.beginning_student_loan_debt),
+      investmentIncome: num(r.investment_income),
+      investmentAssetValue: num(r.investment_asset_value),
+      auditPenalty: num(r.audit_penalty),
+    };
+    if (
+      Object.values(values).some((value) => value === null || value < 0) ||
+      (r.deduction_method !== "standard" && r.deduction_method !== "itemized") ||
+      (r.audit_resolution !== "not-triggered" && r.audit_resolution !== "bypassed-beta")
+    ) {
+      return null;
+    }
+    details = {
+      ...(values as { [K in keyof typeof values]: number }),
+      deductionMethod: r.deduction_method,
+      auditResolution: r.audit_resolution,
+    };
+  }
   return {
     ...(numbers as { [K in keyof typeof numbers]: number }),
     pathwayId: r.pathway_id,
     scenarioId: r.scenario_id,
     filingStatus: r.filing_status,
     homeowner: r.homeowner,
+    details,
     cards: cards.flatMap((card) =>
       isRecord(card) && typeof card.stage === "string" && typeof card.card_id === "string"
         ? [{ stage: card.stage, cardId: card.card_id }]

@@ -137,13 +137,13 @@ test("Rounds 1 to 3 offer the same card stages; Prepayment opens in Rounds 1-2",
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 3), /two cards/);
 });
 
-test("Round 2 opens Tax Prepayment but not Results; Round 3 stops after Tax Calculation", () => {
+test("Round 2 opens Tax Prepayment and Results; Round 3 stops after Tax Calculation", () => {
   for (const round of [2, 3]) {
     assert.equal(advanceTarget("income-or-retirement", round)?.stage, "life-event");
     assert.equal(advanceTarget("life-event", round)?.stage, "wildcard");
     assert.equal(advanceTarget("wildcard", round)?.stage, "deduction");
     assert.equal(advanceTarget("deduction", round)?.stage ?? null, round === 2 ? "tax-prepayment" : null);
-    assert.equal(advanceTarget("tax-prepayment", round), null);
+    assert.equal(advanceTarget("tax-prepayment", round)?.stage ?? null, round === 2 ? "results-and-life-ledger" : null);
   }
   assert.equal(advanceTarget("deduction", 1)?.stage, "tax-prepayment");
   assert.equal(advanceTarget("wildcard", 4), null);

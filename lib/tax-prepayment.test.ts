@@ -194,7 +194,7 @@ test("Deduction advances to Tax Prepayment, then Results (Audit is skipped), and
     label: "Results and Life Ledger",
   });
   assert.equal(advanceTarget("results-and-life-ledger", 1), null);
-  assert.equal(advanceTarget("tax-prepayment", 2), null);
+  assert.deepEqual(advanceTarget("tax-prepayment", 2), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.deepEqual(advanceTarget("deduction", 2), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.equal(advanceTarget("deduction", 3), null);
 });

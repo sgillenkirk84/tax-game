@@ -1,7 +1,8 @@
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createServiceSupabaseClient } from "@/lib/service-supabase";
 import { cardNamesFor } from "@/lib/card-names";
-import { summarizeStoredResults } from "@/lib/round-results";
+import { resultsAvailableForRound, summarizeStoredResults } from "@/lib/round-results";
+import { serverMaxEnabledRound } from "@/lib/round-limits";
 
 // Read-only restore of a finalized Round Results page. It never writes. It uses
 // the service-only get_round_results RPC, which verifies the student's
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
   const credentials = body && readStudentCredentials(body);
   if (!body || !credentials || typeof body.round !== "number" || !Number.isInteger(body.round)) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+  if (!resultsAvailableForRound(body.round, serverMaxEnabledRound())) {
+    return Response.json({ error: "Results are not available for this round yet." }, { status: 409 });
   }
 
   const supabase = createServiceSupabaseClient();

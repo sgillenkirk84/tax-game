@@ -31,6 +31,9 @@ const scenarioNames: Record<string, string> = {
 };
 
 const filingLabels: Record<string, string> = {
+  SINGLE: "Single",
+  MFJ: "Married filing jointly",
+  HOH: "Head of household",
   single: "Single",
   married_filing_jointly: "Married filing jointly",
   head_of_household: "Head of household",
@@ -81,7 +84,7 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const nextRound = round + 1;
-  const nextEnabled = nextRound <= clientMaxEnabledRound();
+  const nextEnabled = nextRound <= 3 && nextRound <= clientMaxEnabledRound();
 
   const restore = useCallback(async () => {
     try {
@@ -195,6 +198,10 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           Your cards are saved. Finish the round to see your final results. Your tax prepayment is settled against
           your calculated tax, and your living costs and any student-loan payment are applied one time.
         </p>
+        <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          Temporary beta rule: if an Audit was triggered, its resolution is bypassed. No Audit adjustment
+          or penalty is applied; the trigger remains recorded in your round history.
+        </p>
         {error ? (
           <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
             {error}
@@ -231,7 +238,9 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
       </dl>
 
       <Section title="Money this round">
+        <Row label="Beginning cash/resources" value={money(results.beginningCash)} />
         <Row label="Gross income" value={money(results.grossIncome)} />
+        {results.details ? <Row label="Adjusted gross income" value={money(results.details.adjustedGrossIncome)} /> : null}
         {results.otherCashInflows > 0 ? <Row label="Other cash inflows" value={money(results.otherCashInflows)} /> : null}
         <Row label="Living costs" value={`-${money(results.livingCosts)}`} />
         {results.personalExpenses > 0 ? <Row label="Personal expenses" value={`-${money(results.personalExpenses)}`} /> : null}
@@ -241,9 +250,24 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
       </Section>
 
       <Section title="Tax results">
-        <Row label="Calculated tax" value={money(results.calculatedTax)} />
+        {results.details ? (
+          <>
+            <Row label={`Deduction (${results.details.deductionMethod})`} value={money(results.details.deductionAmount)} />
+            <Row label="Taxable income" value={money(results.details.taxableIncome)} />
+            <Row label="Income Tax Before Credits" value={money(results.details.taxBeforeCredits)} />
+            <Row label="Tax credits applied" value={money(results.details.creditsApplied)} />
+            <Row label="Tax Prepayment percentage" value={`${results.details.prepaymentRatePct}%`} />
+          </>
+        ) : null}
+        <Row label="Calculated tax after credits" value={money(results.calculatedTax)} />
         <Row label="Tax you prepaid" value={money(results.taxPrepaid)} />
       </Section>
+      {results.details?.auditResolution === "bypassed-beta" ? (
+        <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          Audit triggered — resolution bypassed under the temporary beta rule. No Audit adjustment or
+          penalty was applied. These Results are saved with that limitation.
+        </p>
+      ) : null}
       <p role="status" className="mt-2 rounded-xl bg-[var(--brand-gold)]/15 p-3 text-lg font-black">
         {taxResult}
       </p>
@@ -251,6 +275,14 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
       <Section title="Ending position">
         <Row label="Ending cash" value={money(results.endingCash)} strong />
         <Row label="Student-loan debt" value={money(results.endingDebt)} />
+        {results.details ? (
+          <>
+            <Row label="Beginning student-loan debt" value={money(results.details.beginningDebt)} />
+            <Row label="Investment income" value={money(results.details.investmentIncome)} />
+            <Row label="Investment asset value" value={money(results.details.investmentAssetValue)} />
+            <Row label="Audit penalty" value={money(results.details.auditPenalty)} />
+          </>
+        ) : null}
         <Row label="Filing status" value={filingLabels[results.filingStatus] ?? results.filingStatus} />
         <Row label="Homeowner" value={results.homeowner ? "Yes" : "No"} />
         <Row label="Active dependents" value={String(results.activeDependents)} />

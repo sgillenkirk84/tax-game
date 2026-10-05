@@ -33,6 +33,9 @@ const rpcErrors: Array<[string, number, string]> = [
   ["LIFE_EVENT_INELIGIBLE", 409, "This Life Event does not apply to you right now. Return the card to the bottom of the deck and draw another."],
   ["DEDUCTION_INELIGIBLE", 409, "This Deduction card does not apply to you right now. Return the card to the bottom of the deck and draw another."],
   ["IDEMPOTENCY_KEY_REUSED", 409, "This save request was already used for a different card. Try again."],
+  ["TAX_CALCULATION_REQUIRED", 409, "Calculate your taxes before choosing a Tax Prepayment card."],
+  ["PREPAYMENT_ALREADY_FIXED", 409, "Your Tax Prepayment card is already final."],
+  ["REDRAW_NOT_ALLOWED", 409, "A redraw is not available for your Tax Prepayment card."],
 ];
 
 // Authenticated save of a physical card. The browser sends only the card ID,
@@ -69,6 +72,9 @@ export async function POST(request: Request) {
   }
 
   const cardId = normalizeCardId(body.cardId);
+  if (body.stage === "tax-prepayment" && process.env.TAX_PREPAYMENT_ENABLED !== "true") {
+    return Response.json({ error: "Tax Prepayment is not available yet." }, { status: 404 });
+  }
   if (!cardIdPattern.test(cardId)) {
     return Response.json({ error: "Card IDs use letters, numbers and dashes, like INC-W2-001." }, { status: 400 });
   }

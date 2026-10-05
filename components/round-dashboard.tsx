@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
 import TaxCalculation from "@/components/tax-calculation";
+import TaxPrepayment from "@/components/tax-prepayment";
 import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage, stageInstructionsFor } from "@/lib/card-entry";
 import { STANDARD_DEDUCTION_NOTE, showsStandardDeduction } from "@/lib/standard-deduction";
 import { advanceTarget, flowIndex, ROUND_FLOW } from "@/lib/round-stages";
@@ -19,6 +20,7 @@ type Progress = {
 };
 
 const advanceEnabled = process.env.NEXT_PUBLIC_STAGE_ADVANCE_ENABLED === "true";
+const prepaymentEnabled = process.env.NEXT_PUBLIC_TAX_PREPAYMENT_ENABLED === "true";
 
 const money = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -157,7 +159,9 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
           if (index === currentIndex) {
             return (
               <li key={step.id}>
-                {isCardStage(step.id) ? (
+                {step.id === "tax-prepayment" && prepaymentEnabled ? (
+                  <TaxPrepayment round={round} player={player} pathwayId={pathwayId} />
+                ) : isCardStage(step.id) ? (
                   <CardEntry
                     key={step.id}
                     round={round}
@@ -174,7 +178,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                     {label} is coming soon.
                   </p>
                 )}
-                {currentSaved && isCardStage(step.id) ? (
+                {currentSaved && isCardStage(step.id) && step.id !== "tax-prepayment" ? (
                   <div className="mt-4">
                     {step.id === "deduction" && round === 1 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
                     {advanceError ? (
@@ -182,7 +186,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                         {advanceError}
                       </p>
                     ) : null}
-                    {target && advanceEnabled ? (
+                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled)) ? (
                       <button
                         type="button"
                         onClick={() => void advance()}
@@ -191,7 +195,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                       >
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
-                    ) : step.id === "deduction" && taxCalculated ? null : (
+                    ) : step.id === "deduction" ? null : (
                       <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                         {target ? "The next stage is coming soon." : `${label} complete. Your teacher will let you know when the next step opens.`}
                       </p>

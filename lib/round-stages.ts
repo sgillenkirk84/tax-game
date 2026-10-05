@@ -39,5 +39,8 @@ export function advanceTarget(stage: string, round: number): { stage: CardStage;
   if (round === 1 && stage === "wildcard") {
     return { stage: "deduction", label: "Deduction" };
   }
+  if (round === 1 && stage === "deduction") {
+    return { stage: "tax-prepayment", label: "Tax Prepayment" };
+  }
   return null;
 }

@@ -9,6 +9,7 @@ import {
   type CardStage,
   choiceConfigFor,
   choiceLabel,
+  REDRAW_CHOICE,
   sectionsFor,
   stageCardRules,
   stageInstructions,
@@ -28,6 +29,8 @@ type CardEntryProps = {
   // Reports whether the stage has enough saved cards to continue (now or
   // earlier), so a parent can offer a separate Continue action.
   onSavedChange?: (saved: boolean) => void;
+  // A Corporate Climber's second Tax Prepayment draw. The first card stays saved.
+  redraw?: boolean;
 };
 
 const saveEnabled = process.env.NEXT_PUBLIC_CARD_SAVE_ENABLED === "true";
@@ -49,6 +52,7 @@ export default function CardEntry({
   onSaved,
   onSavedChange,
   hideStandardDeductionNote = false,
+  redraw = false,
 }: CardEntryProps) {
   const [cards, setCards] = useState<CardPreview[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -58,9 +62,9 @@ export default function CardEntry({
   const [saving, setSaving] = useState(false);
   const [savedCards, setSavedCards] = useState<CardPreview[]>([]);
   const [limitReached, setLimitReached] = useState(false);
-  const rules = stageCardRules(stage, pathwayId, round);
+  const rules = redraw ? { min: 2, max: 2 } : stageCardRules(stage, pathwayId, round);
   // saved: no more cards can be added. canContinue: the required cards are in.
-  const saved = limitReached || (rules.max > 0 && savedCards.length >= rules.max);
+  const saved = (limitReached && !redraw) || (rules.max > 0 && savedCards.length >= rules.max);
   const canContinue = saved || (rules.min > 0 && savedCards.length >= rules.min);
   const remaining = rules.max - savedCards.length;
   useEffect(() => {
@@ -135,7 +139,7 @@ export default function CardEntry({
           id: player.id,
           resumeToken: player.resumeToken,
           cardId: card.id,
-          choice: choiceConfigFor(card.id) ? choice : undefined,
+          choice: redraw ? REDRAW_CHOICE : choiceConfigFor(card.id) ? choice : undefined,
           round,
           stage,
           expectedCategory,
@@ -182,7 +186,9 @@ export default function CardEntry({
           <p role="status" className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
             {saved
               ? `All ${savedCards.length} cards saved.`
-              : rules.min > savedCards.length
+              : redraw
+                ? "Your first card stays on record. Physically draw one more card and select it below."
+                : rules.min > savedCards.length
                 ? `${savedCards.length} of ${rules.min} cards saved. Draw and save ${rules.min - savedCards.length} more.`
                 : `${savedCards.length} card saved. You may draw ${remaining} more if your pathway allows it.`}
           </p>

@@ -85,7 +85,7 @@ export function stageCardRules(stage: CardStage, pathwayId: string, round: numbe
     }
     return pathwayId === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
   }
-  return stage === "life-event" || stage === "wildcard" || stage === "deduction"
+  return stage === "life-event" || stage === "wildcard" || stage === "deduction" || stage === "tax-prepayment"
     ? { min: 1, max: 1 }
     : { min: 0, max: 0 };
 }
@@ -176,7 +176,13 @@ export function choiceConfigFor(cardId: string): CardChoiceConfig | null {
 }
 
 // A card with a choice needs one of its options; a card without one needs none.
+export const REDRAW_CHOICE = "redraw";
+
 export function isValidCardChoice(cardId: string, choice: string | null): boolean {
+  // A Tax Prepayment card may be tagged as a redraw; the database decides eligibility.
+  if (cardId.startsWith("PRE-") && choice === REDRAW_CHOICE) {
+    return true;
+  }
   const config = choiceConfigFor(cardId);
   if (!config) {
     return choice === null;

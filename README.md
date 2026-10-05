@@ -252,3 +252,23 @@ The mocked browser walkthrough did not complete because API interception was
 ineffective. No browser E2E success is claimed; this is a validation limitation,
 not a demonstrated game failure. Production verification of this extended flow
 remains pending manual migration installation and live testing.
+
+## Round 4 Tax Prepayment (TASK 10.15.29)
+
+The user manually installed `20261005190000_round_four_tax_calculation.sql` successfully in
+TEST and Production, redeployed commit `aa66f710d272b052460619abd16df4a73544db49`,
+and live-verified Round 4 through saved Tax Calculation.
+
+This local extension opens the shared physical Tax Prepayment stage in Round 4.
+Every pathway, including Early Retiree, uses the saved Income Tax Before Credits
+times the authoritative card percentage with whole-dollar halves-up rounding.
+Retirement components and saved tax are not recomputed. The existing $350 basis,
+$350 credits, $0 calculated tax, 105% card regression still fixes $368.
+Existing Corporate Climber keep/redraw and fixed-state restore remain unchanged.
+After fixed Prepayment, Round 4 stops; Results/Life Ledger and Round 5 stay closed.
+
+`supabase/migrations/20261005200000_round_four_tax_prepayment.sql` widens only
+recording Prepayment, Deduction-to-Prepayment advancement, and Climber keep gates.
+No formula, rate, tax, history or environment changes are made. This local migration
+has not been executed or installed by this task.
+Round 4 Tax Prepayment is locally validated but has not yet been live-verified.

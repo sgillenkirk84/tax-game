@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   if (!body || !credentials || typeof body.round !== "number" || !Number.isInteger(body.round)) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
-  if (!serverRoundEnabled(body.round) || body.round > 3) {
+  if (!serverRoundEnabled(body.round) || body.round > 4) {
     return Response.json({ error: "Tax Prepayment is not available for this round yet." }, { status: 409 });
   }
 

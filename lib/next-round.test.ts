@@ -137,13 +137,13 @@ test("Rounds 1 to 3 offer the same card stages including Tax Prepayment", () => 
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 3), /two cards/);
 });
 
-test("Round 2 opens Tax Prepayment and Results; Round 3 stops after Tax Prepayment", () => {
+test("Rounds 2 and 3 open shared Tax Prepayment and Results", () => {
   for (const round of [2, 3]) {
     assert.equal(advanceTarget("income-or-retirement", round)?.stage, "life-event");
     assert.equal(advanceTarget("life-event", round)?.stage, "wildcard");
     assert.equal(advanceTarget("wildcard", round)?.stage, "deduction");
     assert.equal(advanceTarget("deduction", round)?.stage, "tax-prepayment");
-    assert.equal(advanceTarget("tax-prepayment", round)?.stage ?? null, round === 2 ? "results-and-life-ledger" : null);
+    assert.equal(advanceTarget("tax-prepayment", round)?.stage, "results-and-life-ledger");
   }
   assert.equal(advanceTarget("deduction", 1)?.stage, "tax-prepayment");
   assert.equal(advanceTarget("wildcard", 4), null);
@@ -229,19 +229,20 @@ test("Round 3 physical Income and supported stages reuse existing card rules", (
   assert.doesNotMatch(entry, /Math\.random/);
 });
 
-test("Round 3 can advance to Tax Prepayment but cannot expose Results or Round 4", () => {
+test("Round 3 can advance through shared Results but cannot expose Round 4", () => {
   assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
-  assert.equal(advanceTarget("tax-prepayment", 3), null);
+  assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
+  assert.equal(advanceTarget("tax-prepayment", 4), null);
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 4), { min: 0, max: 0 });
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const prepaymentMigration = read("../supabase/migrations/20261005160000_round_three_tax_prepayment.sql");
   assert.match(prepaymentMigration, /when life_row\.current_round not between 1 and 3 then 0/);
   assert.match(prepaymentMigration, /when 'deduction' then\n      if life_row\.current_round between 1 and 3 then/);
-  const resultsMigration = read("../supabase/migrations/20261005150000_round_two_results.sql");
-  assert.match(resultsMigration, /if life_row\.current_round not between 1 and 2 then/);
+  const resultsMigration = read("../supabase/migrations/20261005170000_round_three_results.sql");
+  assert.match(resultsMigration, /if life_row\.current_round not between 1 and 3 then/);
   assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 3/);
-  assert.match(read("./round-results.ts"), /round <= 2 && round <= maxEnabledRound/);
+  assert.match(read("./round-results.ts"), /round <= 3 && round <= maxEnabledRound/);
   const dashboard = read("../components/round-dashboard.tsx");
   assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 3/);
 });

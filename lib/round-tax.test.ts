@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildRoundTaxCalculation, type RoundTaxSnapshot } from "./round-tax.ts";
 import { dependentExpiresAfter } from "./round-rules.ts";
-import { computeRoundResults, economicGrossIncome } from "./round-results.ts";
+import { computeRoundResults, economicGrossIncome, toFinalizePayload } from "./round-results.ts";
 import { calculateFederalIncomeTax } from "./game-calculations/calculations.ts";
 
 function snapshot(options: {
@@ -359,8 +359,42 @@ for (const pathway of ["PATH-001", "PATH-002", "PATH-003", "PATH-004", "PATH-005
       });
     }
     assert.equal(result.sources.some((source) => source.category === "social-security" || source.category === "pension-income"), false);
+    const before = structuredClone(input);
+    const savedFixedPrepayment = 1234;
+    assert.ok(typeof result.round.gross_income === "number");
+    assert.ok(typeof result.round.adjusted_gross_income === "number");
+    assert.ok(typeof result.round.final_tax_liability === "number");
+    const settled = computeRoundResults({
+      beginningCash: input.round.beginning_cash_resources,
+      beginningDebt: input.round.beginning_student_loan_debt,
+      grossIncome: economicGrossIncome(result.round.gross_income, result.calculation.pending_effects),
+      adjustedGrossIncome: result.round.adjusted_gross_income,
+      finalTax: result.round.final_tax_liability,
+      fixedPrepayment: savedFixedPrepayment,
+      pendingEffects: result.calculation.pending_effects,
+    });
+    assert.equal(settled.taxPrepaid, savedFixedPrepayment);
+    assert.equal(settled.studentLoanPayment, 4000);
+    assert.equal(settled.endingDebt, 8000);
+    assert.equal(settled.auditPenalty, 0);
+    assert.equal(toFinalizePayload(settled).ending_student_loan_debt, 8000);
+    assert.equal(toFinalizePayload(settled).ending_cash, settled.endingCash);
+    assert.deepEqual(input, before, "settlement must not expire effects or mutate household/assets");
+    if (pathway === "PATH-003") {
+      assert.ok(result.dependents.some((dependent) => dependent.sourceCardId === "PATH-003"));
+    }
   });
 }
+
+test("Round 3 cannot save authoritative tax inputs with any required physical-card stage missing", () => {
+  for (const stage of ["income-or-retirement", "life-event", "wildcard", "deduction"]) {
+    const input = snapshot({ round: 3 });
+    input.cards = input.cards.filter((card) => card.stage !== stage);
+    const built = buildRoundTaxCalculation(input);
+    assert.ok(!built.ok);
+    assert.equal(built.code, "INCOMPLETE_ROUND", stage);
+  }
+});
 
 for (const wildcard of ["WILD-001", "WILD-002", "WILD-003", "WILD-004", "WILD-005", "WILD-006", "WILD-007", "WILD-008", "WILD-009", "WILD-010"]) {
   test(`Round 3 ${wildcard} and Deduction reuse Round 2 treatment without new formulas`, () => {

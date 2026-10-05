@@ -170,3 +170,26 @@ Manual Production rollout history: `MAX_ENABLED_ROUND` was found still set to 2.
 The user changed it to 3, verified other relevant Vercel settings and manually
 redeployed Production. Round 3 then opened for the existing player, who progressed
 successfully to Round 3 Tax Calculation. This task changes no environment values.
+
+## Round 3 Results and Life Ledger (TASK 10.15.23)
+
+Enabled Round 3 can continue from fixed Tax Prepayment to shared Results, finalize
+once, and restore its immutable snapshot after refresh. The finalizer consumes
+the saved fixed payment without recalculating it, settles against Calculated Tax,
+and uses unchanged progressive Living Costs and capped student-loan payments.
+Saved household/dependent state (including the Caregiver permanent dependent),
+investments and effect lifecycle remain shared. Triggered Audit stays recorded
+as `bypassed-beta`, unresolved, with no adjustment or penalty.
+
+The accepted Life Ledger layout now fills Round 3 from its saved Results alongside
+Rounds 1 and 2; unfinished Rounds 4 and 5 remain dashes. Round 4 is still closed.
+Review and manually install `20261005170000_round_three_results.sql` before live
+testing. It widens only the two existing Results availability gates and does not
+rewrite prior snapshots. This task executes no SQL and changes no environment values.
+
+Verified live history: Production `MAX_ENABLED_ROUND` was manually corrected
+from 2 to 3 and Production redeployed; Round 3 opened and progressed through Tax
+Calculation. `20261005160000_round_three_tax_prepayment.sql` was then manually
+installed successfully in TEST and Production. After refresh, live Round 3 Tax
+Prepayment opened; an actual physical card was selected and saved, and the tax
+due/settlement amount displayed successfully.

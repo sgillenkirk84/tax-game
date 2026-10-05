@@ -20,7 +20,7 @@ const rpcErrors: Array<[string, number, string]> = [
 
 const num = (value: unknown): number => Number(value);
 
-// Finalizes enabled Rounds 1-2. The browser sends credentials, the round and a retry key.
+// Finalizes enabled Rounds 1-3. The browser sends credentials, the round and a retry key.
 // Every amount is rebuilt from saved round data on the server and the database
 // verifies it again before changing anything. A finalized round is returned
 // unchanged, so refreshing or retrying can never apply the Results twice.

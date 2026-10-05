@@ -199,7 +199,7 @@ test("Deduction advances to Tax Prepayment, then Results (Audit is skipped), and
   assert.deepEqual(advanceTarget("tax-prepayment", 2), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.deepEqual(advanceTarget("deduction", 2), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
-  assert.equal(advanceTarget("tax-prepayment", 3), null);
+  assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
 });
 
 test("Round 3 shares all pre-credit card rates and restores fixed payments without mutating history", () => {
@@ -236,7 +236,7 @@ test("Round 3 shares all pre-credit card rates and restores fixed payments witho
     assert.deepEqual(summarizePrepayment(stored), restored);
     assert.deepEqual(stored, before);
   }
-  assert.equal(resultsAvailableForRound(3, 3), false);
+  assert.equal(resultsAvailableForRound(3, 3), true);
   assert.equal(resultsAvailableForRound(4, 3), false);
 });
 
@@ -303,12 +303,12 @@ test("Round 3 gate migration extends exact installed definitions without touchin
   assert.doesNotMatch(sql, /alter table|update public\.mm_game|insert into public\.mm_game|mm_fix_round_prepayment|finalize_round_results|rate_pct/);
 });
 
-test("Round 3 UI requires saved tax, uses physical selection, and stops after fixed Prepayment", () => {
+test("Round 3 UI requires saved tax and fixed physical Prepayment before offering Results", () => {
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
   const dashboard = read("../components/round-dashboard.tsx");
   assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 3/);
   assert.match(dashboard, /prepaymentFixed && resultsEnabled && advanceEnabled && target/);
-  assert.match(dashboard, /round === 3 && prepaymentFixed/);
+  assert.match(dashboard, /round >= 2 && round <= 3 && prepaymentFixed && \(!resultsEnabled \|\| !advanceEnabled\)/);
   const ui = read("../components/tax-prepayment.tsx");
   assert.match(ui, /<CardEntry[\s\S]*stage="tax-prepayment"/);
   assert.match(ui, /physically draw/);

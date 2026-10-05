@@ -33,6 +33,23 @@ export function calculatePrepaymentDollars(calculatedTax: number, ratePct: numbe
   return Math.floor((Math.round(calculatedTax * 100) * ratePct + 5000) / 10000);
 }
 
+export type SettlementPreview = { kind: "refund" | "due" | "settled"; amount: number };
+
+// Display-only: derived from the two saved values and never stored.
+export function settlementPreview(calculatedTax: number, prepaidAmount: number): SettlementPreview {
+  if (!Number.isFinite(calculatedTax) || !Number.isFinite(prepaidAmount)) {
+    throw new RangeError("Tax and prepaid amount must be finite.");
+  }
+  const result = prepaidAmount - calculatedTax;
+  if (result > 0) {
+    return { kind: "refund", amount: result };
+  }
+  if (result < 0) {
+    return { kind: "due", amount: -result };
+  }
+  return { kind: "settled", amount: 0 };
+}
+
 export function canRedraw(pathwayId: string, firstRatePct: number): boolean {
   return pathwayId === CORPORATE_CLIMBER_PATHWAY_ID && firstRatePct < REDRAW_THRESHOLD_PCT;
 }

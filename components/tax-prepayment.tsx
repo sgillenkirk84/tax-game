@@ -2,7 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
-import { type PrepaymentState, REDRAW_THRESHOLD_PCT } from "@/lib/tax-prepayment";
+import { type PrepaymentState, REDRAW_THRESHOLD_PCT, settlementPreview } from "@/lib/tax-prepayment";
 
 type TaxPrepaymentProps = {
   round: number;
@@ -17,8 +17,8 @@ const money = (value: number) =>
 
 // Tax Prepayment: the student selects the physical card they drew. The server
 // fixes the prepaid amount from the saved calculated tax and the card's rate,
-// so the browser never supplies an amount. Nothing here changes cash, settles
-// tax, or shows a refund or amount due; that waits for Results.
+// so the browser never supplies an amount. Nothing here changes cash or settles
+// tax; the refund or amount due is a derived preview shown only once final.
 export default function TaxPrepayment({ round, player, pathwayId }: TaxPrepaymentProps) {
   const [state, setState] = useState<PrepaymentState | null>(null);
   const [details, setDetails] = useState<Details>({});
@@ -114,6 +114,8 @@ export default function TaxPrepayment({ round, player, pathwayId }: TaxPrepaymen
   if (state.status === "fixed" && state.fixed) {
     const finalCard = details[state.fixed.cardId];
     const firstCard = state.fixed.firstCardId ? details[state.fixed.firstCardId] : null;
+    const preview =
+      state.calculatedTax === null ? null : settlementPreview(state.calculatedTax, state.fixed.prepaidAmount);
     return (
       <section className="mt-2 rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-5">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-gold)]">
@@ -140,9 +142,21 @@ export default function TaxPrepayment({ round, player, pathwayId }: TaxPrepaymen
             <dd className="mt-1 text-2xl font-black">{money(state.fixed.prepaidAmount)}</dd>
           </div>
         </dl>
+        {preview ? (
+          <div className="mt-3 rounded-xl bg-white p-4">
+            <p className="text-2xl font-black">
+              {preview.kind === "refund"
+                ? `Your tax refund: ${money(preview.amount)}`
+                : preview.kind === "due"
+                  ? `Tax amount due: ${money(preview.amount)}`
+                  : "You're exactly settled — $0 due and $0 refund."}
+            </p>
+            <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Before any audit.</p>
+          </div>
+        ) : null}
         <p className="mt-3 text-sm text-[var(--brand-navy)]/75">
-          Your prepaid amount is now locked in. You will find out how it compares with your calculated tax when
-          you see your Results.
+          Your prepaid amount is now locked in. This is a preview only: your cash has not changed and nothing
+          has been paid or collected yet.
         </p>
         {estimatedNote}
       </section>

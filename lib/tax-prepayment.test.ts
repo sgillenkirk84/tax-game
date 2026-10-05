@@ -8,8 +8,16 @@ import {
   calculatePrepaymentDollars,
   canRedraw,
   PREPAYMENT_RATES_PCT,
+  settlementPreview,
   summarizePrepayment,
 } from "./tax-prepayment.ts";
+
+test("settlement preview shows a refund, an amount due, or exactly settled", () => {
+  assert.deepEqual(settlementPreview(5000, 6500), { kind: "refund", amount: 1500 });
+  assert.deepEqual(settlementPreview(5000, 4000), { kind: "due", amount: 1000 });
+  assert.deepEqual(settlementPreview(5000, 5000), { kind: "settled", amount: 0 });
+  assert.deepEqual(settlementPreview(0, 0), { kind: "settled", amount: 0 });
+});
 
 const cards = dataset.cards.filter((card) => card.deck === "Tax Prepayment" && card.active === "Yes");
 

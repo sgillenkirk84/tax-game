@@ -15,7 +15,7 @@ const rpcErrors: Array<[string, number, string]> = [
   ["IDEMPOTENCY_KEY_REUSED", 409, "This request was already used for a different calculation."],
 ];
 
-// Backend-only Round 1 tax calculation. The browser sends credentials, the round
+// Backend-only shared tax calculation. The browser sends credentials, the round
 // and a retry key; every amount is rebuilt server-side from saved gameplay history.
 // Disabled by default; it does not change the stage or finalize the round.
 export async function POST(request: Request) {

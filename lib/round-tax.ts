@@ -1,9 +1,11 @@
 import workbookData from "./game-data/workbook-data.json" with { type: "json" };
 import { itemizedDeductionForCard } from "./game-calculations/deduction-rules.ts";
 import { dependentActiveInRound, resolveClimberPrimary } from "./round-rules.ts";
+import { getRoundIncomeCardCategory } from "./round-income.ts";
 import type { GameCard, GameDataset } from "./game-data/types";
 import {
   calculateGameTax,
+  calculateEarlyRetirementIncome,
   selectWorkbookDeduction,
   type ActiveDependent,
   type FilingStatusCode,
@@ -115,8 +117,11 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   if (life.status !== "in_progress" || round.status !== "in_progress") {
     return fail("ROUND_NOT_OPEN", "This round is not open for calculation.");
   }
-  if (round.round_number < 1 || round.round_number > 3 || life.current_round !== round.round_number) {
-    return fail("ROUND_NOT_SUPPORTED", "Tax calculation is only available for Rounds 1 to 3.");
+  if (round.round_number < 1 || round.round_number > 4 || life.current_round !== round.round_number) {
+    return fail("ROUND_NOT_SUPPORTED", "Tax calculation is only available for Rounds 1 to 4.");
+  }
+  if (life.tax_year !== 2025) {
+    return fail("TAX_YEAR_NOT_SUPPORTED", "Only Tax Year 2025 is supported.");
   }
   if (round.current_stage !== "deduction" || life.current_stage !== "deduction") {
     return fail("NOT_DEDUCTION_STAGE", "Tax is calculated after the Deduction stage.");
@@ -131,7 +136,9 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
     life.pathway_id === "PATH-006" ? { min: 2, max: 2 } : life.pathway_id === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
   const historyIds: Record<string, string[]> = {};
   const cardsByStage: Record<string, RoundTaxSnapshot["cards"][number]> = {};
-  for (const [stage, deck] of STAGES) {
+  const incomeDeck = getRoundIncomeCardCategory(life.pathway_id, round.round_number);
+  for (const [stage, defaultDeck] of STAGES) {
+    const deck = stage === "income-or-retirement" ? incomeDeck : defaultDeck;
     const saved = snapshot.cards
       .filter((card) => card.stage === stage)
       .sort((a, b) => a.order_in_stage - b.order_in_stage);
@@ -162,7 +169,14 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   // Income sources. Opening cash and debt are deliberately not read as income or deductions.
   // Each Income card is its own source; all of them contribute to the calculation.
   const sources: IncomeSource[] = [];
-  for (const [position, entry] of incomeEntries.entries()) {
+  const retirement = incomeDeck === "Retirement"
+    ? calculateEarlyRetirementIncome({
+        roundNumber: round.round_number,
+        retirementCardId: incomeEntries[0].card_id,
+      })
+    : null;
+  if (retirement) sources.push(...retirement.incomeSources.map((source) => ({ ...source })));
+  for (const [position, entry] of (retirement ? [] : incomeEntries).entries()) {
     const card = findCard(entry.card_id)!;
     const category = incomeCategory(card);
     if (!category || typeof card.amount !== "number") {
@@ -289,7 +303,7 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   const filingStatus: FilingStatusCode = married ? "MFJ" : activeDependents.length > 0 ? "HOH" : "SINGLE";
   stateChanges.filing_status = filingStatus;
   const primary = sources[0];
-  const spouseIncome: IncomeSource | null = married
+  const spouseIncome: IncomeSource | null = married && !retirement
     ? { ...primary, sourceId: `spouse:${primary.sourceId}` }
     : null;
   if (spouseIncome) {
@@ -471,6 +485,14 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
       homeowner_before: life.homeowner,
       homeowner_after: homeowner,
       income_sources: sources,
+      ...(retirement ? {
+        retirement_card: {
+          card_id: incomeEntries[0].card_id,
+          deck: incomeDeck,
+          income_components: findCard(incomeEntries[0].card_id)!.incomeComponents,
+        },
+        retirement_package: retirement,
+      } : {}),
       wild_004: wildChoice ? { choice: wildChoice, business_income_reduction: businessExpenseReduction } : null,
       dependents: activeDependents,
       education_opportunity: educationOpportunity ?? null,

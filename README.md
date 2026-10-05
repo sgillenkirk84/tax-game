@@ -223,3 +223,32 @@ changed Vercel `NEXT_PUBLIC_MAX_ENABLED_ROUND` to 4 and `MAX_ENABLED_ROUND` to 4
 before publication. Live Round 4 verification is pending the new Production
 deployment; effective deployed values have not been independently verified.
 TASK 10.15.26 changes no environment values and executes no SQL.
+
+## Round 4 through Tax Calculation (TASK 10.15.27)
+
+The opening foundation is now live-verified in Production: Early Retiree used
+Retirement, Caregiver used Income, and both stopped before Life Event.
+
+This local extension reuses the shared Life Event, Wildcard, Deduction and tax
+engine through Round 4. After the saved tax calculation, the player stays at
+Deduction with a Tax Prepayment coming-soon notice. Round 4 Tax Prepayment,
+Results/Life Ledger and all Round 5 gameplay remain closed.
+
+Early Retiree resolves the saved Retirement card from the authoritative workbook,
+preserves its original components in the input snapshot, and uses the existing
+protected-package rule (higher of the $42,000 guarantee and the complete card
+package). The shared 2025 engine applies Social Security treatment to the winning
+component mix; nothing is relabeled W-2. A married player retains MFJ without
+doubling retirement income. Existing recurring investments are added once per
+investment event; a new investment's income still begins the following round.
+
+`supabase/migrations/20261005190000_round_four_tax_calculation.sql` widens only
+the three card-recording gates, transitions leading to Deduction, and tax saving.
+It preserves saved-calculation replay, security, household/effect persistence and
+all later-stage gates. It has not been executed or installed by this task.
+No environment variables, workbook values, tax formulas or finalized history change.
+
+The mocked browser walkthrough did not complete because API interception was
+ineffective. No browser E2E success is claimed; this is a validation limitation,
+not a demonstrated game failure. Production verification of this extended flow
+remains pending manual migration installation and live testing.

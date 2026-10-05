@@ -144,7 +144,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
               <li key={step.id} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-green-800">Completed · {label}</p>
                 {step.kind === "automatic" ? (
-                  round >= 1 && round <= 3 ? (
+                  round >= 1 && round <= 4 ? (
                     <TaxCalculation round={round} player={player} readOnly />
                   ) : (
                     <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Calculated automatically.</p>
@@ -207,7 +207,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                 ) : null}
                 {currentSaved && isCardStage(step.id) && step.id !== "tax-prepayment" ? (
                   <div className="mt-4">
-                    {step.id === "deduction" && round >= 1 && round <= 3 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
+                    {step.id === "deduction" && round >= 1 && round <= 4 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
                     {advanceError ? (
                       <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
                         {advanceError}
@@ -223,7 +223,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
                     ) : step.id === "deduction" ? (
-                      taxCalculated && (!prepaymentEnabled || !advanceEnabled) ? (
+                      taxCalculated && (!target || !prepaymentEnabled || !advanceEnabled) ? (
                         <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                           Your Round {round} tax return is saved. Tax Prepayment is not available yet.
                         </p>
@@ -238,11 +238,6 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                 {step.id === "tax-prepayment" && round >= 2 && round <= 3 && prepaymentFixed && (!resultsEnabled || !advanceEnabled) ? (
                   <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                     Your Round {round} Tax Prepayment is saved. Results and Life Ledger are coming next.
-                  </p>
-                ) : null}
-                {round === 4 && step.id === "income-or-retirement" && currentSaved ? (
-                  <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
-                    Your Round 4 {label} cards are saved. Life Event and later stages are not available yet.
                   </p>
                 ) : null}
               </li>

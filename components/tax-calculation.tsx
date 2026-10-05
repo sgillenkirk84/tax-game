@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { asTaxSummary, interpretTaxResponse, TAX_FRIENDLY_ERRORS, type TaxSummary } from "@/lib/tax-summary";
+import { advanceTarget } from "@/lib/round-stages";
 
 type TaxCalculationProps = {
   round: number;
@@ -160,8 +161,9 @@ export default function TaxCalculation({ round, player, readOnly = false, onCalc
             : `The standard deduction (${money(summary.standardDeduction)}) was used because your itemized deductions (${money(summary.itemizedDeduction)}) were not larger.`}
         </p>
         <p className="mt-2 rounded-xl bg-white p-3 text-sm font-semibold">
-          Next, you will choose your physical Tax Prepayment card to find out how much tax you have already paid. Your tax
-          return above is saved and will not change.
+          {advanceTarget("deduction", round)
+            ? "Next, you will choose your physical Tax Prepayment card to find out how much tax you have already paid."
+            : "Tax Prepayment is not available yet."} Your tax return above is saved and will not change.
         </p>
       </section>
     );

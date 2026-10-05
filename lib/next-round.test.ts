@@ -150,7 +150,7 @@ test("Rounds 2 and 3 open shared Tax Prepayment and Results", () => {
     assert.equal(advanceTarget("tax-prepayment", round)?.stage, "results-and-life-ledger");
   }
   assert.equal(advanceTarget("deduction", 1)?.stage, "tax-prepayment");
-  assert.equal(advanceTarget("wildcard", 4), null);
+  assert.deepEqual(advanceTarget("wildcard", 4), { stage: "deduction", label: "Deduction" });
 });
 
 test("Round 3 remains the default; Round 4 requires an explicit limit and Round 5 stays closed", () => {
@@ -234,7 +234,7 @@ test("Round 3 physical Income and supported stages reuse existing card rules", (
   assert.doesNotMatch(entry, /Math\.random/);
 });
 
-test("Round 3 can advance through shared Results; Round 4 later stages stay closed", () => {
+test("Round 3 can advance through shared Results; Round 4 Prepayment and Results stay closed", () => {
   assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.equal(advanceTarget("tax-prepayment", 4), null);
@@ -296,24 +296,37 @@ test("Round 4 requires aligned explicit rollout limits and finalized Round 3; st
   assert.deepEqual(planStartNextRound({ ...input, currentRound: 4 }), { action: "replay" });
 });
 
-test("Round 4 opens only first-stage card saving and keeps all regular-life pathway counts", () => {
+test("Round 4 opens shared card stages through Deduction and keeps all regular-life pathway counts", () => {
   for (const pathway of workbookData.pathways) {
     const expectedRules = pathway.id === "PATH-006" ? { min: 2, max: 2 }
       : pathway.id === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
     assert.deepEqual(stageCardRules("income-or-retirement", pathway.id, 4), expectedRules);
     assert.equal(isRoundCardStageAvailable("income-or-retirement", 4), true);
     assert.match(stageInstructionsFor("income-or-retirement", pathway.id, 4), /draw.*card/i);
-    for (const stage of CARD_STAGES.filter((stage) => stage !== "income-or-retirement")) {
+    for (const stage of ["life-event", "wildcard", "deduction"] as const) {
+      assert.equal(isRoundCardStageAvailable(stage, 4), true);
+      assert.deepEqual(stageCardRules(stage, pathway.id, 4), { min: 1, max: 1 });
+      assert.match(stageInstructionsFor(stage, pathway.id, 4), /draw.*card/i);
+    }
+    for (const stage of ["tax-prepayment", "audit-if-triggered"] as const) {
       assert.equal(isRoundCardStageAvailable(stage, 4), false);
       assert.deepEqual(stageCardRules(stage, pathway.id, 4), { min: 0, max: 0 });
       assert.equal(advanceTarget(stage, 4), null);
     }
-    assert.equal(advanceTarget("income-or-retirement", 4), null);
+    assert.equal(advanceTarget("income-or-retirement", 4)?.stage, "life-event");
+    assert.equal(advanceTarget("life-event", 4)?.stage, "wildcard");
+    assert.equal(advanceTarget("wildcard", 4)?.stage, "deduction");
+    assert.equal(advanceTarget("deduction", 4), null);
+    for (const stage of CARD_STAGES) {
+      assert.equal(isRoundCardStageAvailable(stage, 5), false);
+      assert.equal(advanceTarget(stage, 5), null);
+    }
   }
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-008", 4), /Physically shuffle the Retirement deck/);
   assert.doesNotMatch(stageInstructionsFor("income-or-retirement", "PATH-008", 4), /Income deck/);
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 4), /two cards/);
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-002", 4), /Business Income/);
+  assert.match(stageInstructionsFor("life-event", "PATH-003", 4), /permanent dependent token/);
   assert.equal(resultsAvailableForRound(4, 4), false);
 });
 
@@ -359,7 +372,7 @@ test("physical Retirement card IDs retain workbook component identity after rest
   assert.deepEqual(workbookData, before);
 });
 
-test("Round 4 migration patches only start and first-stage card gates in the cumulative installed definitions", () => {
+test("Round 4 migrations patch only authorized gates in the cumulative installed definitions", () => {
   const read = (file: string) => readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const extract = (source: string, name: string) => {
     source = source.replace(/\r\n/g, "\n");
@@ -373,12 +386,14 @@ test("Round 4 migration patches only start and first-stage card gates in the cum
   const advanceKey = "public.advance_round_stage(uuid,text,integer,text,uuid)";
   const finalizerKey = "public.finalize_round_results(uuid,text,integer,uuid,jsonb)";
   const keepKey = "public.keep_round_prepayment_card(uuid,text,integer,uuid)";
+  const taxKey = "public.save_round_tax_result(uuid,text,integer,uuid,jsonb)";
   const definitions = new Map([
     [startKey, extract(migration, "start_next_round")],
     [recordKey, extract(migration, "record_round_card")],
     [advanceKey, extract(migration, "advance_round_stage")],
     [finalizerKey, extract(read("20261004090000_round_results.sql"), "finalize_round_results")],
     [keepKey, extract(read("20261004080000_tax_prepayment.sql"), "keep_round_prepayment_card")],
+    [taxKey, extract(migration, "save_round_tax_result")],
   ]);
   const patch = (file: string, expectedCount: number) => {
     const sql = read(file);
@@ -434,6 +449,36 @@ test("Round 4 migration patches only start and first-stage card gates in the cum
   assert.match(sql, /grant execute on function public.start_next_round.*to service_role/);
   assert.match(sql, /grant execute on function public.record_round_card.*to anon/);
   assert.doesNotMatch(sql, /alter table|update public\.|insert into public\.|mm_fix_round_prepayment/);
+  const beforeTax = new Map(definitions);
+  const taxSql = patch("20261005190000_round_four_tax_calculation.sql", 7);
+  for (const key of [startKey, finalizerKey, keepKey]) {
+    assert.equal(definitions.get(key), beforeTax.get(key), key);
+  }
+  assert.equal(definitions.get(taxKey), beforeTax.get(taxKey)!.replace(
+    "if life_row.current_round not between 1 and 3 then",
+    "if life_row.current_round not between 1 and 4 then",
+  ));
+  const updatedRecord = definitions.get(recordKey)!;
+  const updatedAdvance = definitions.get(advanceKey)!;
+  for (const stage of ["life-event", "wildcard", "deduction"]) {
+    assert.match(updatedRecord, new RegExp(`when '${stage}' then[\\s\\S]*?between 1 and 4 then 1 else 0`));
+  }
+  for (const stage of ["income-or-retirement", "life-event", "wildcard"]) {
+    assert.match(updatedAdvance, new RegExp(`when '${stage}' then\\n      if life_row.current_round between 1 and 4 then`));
+  }
+  for (const [key, fromStage] of [[recordKey, "tax-prepayment"], [advanceKey, "deduction"]]) {
+    const marker = `when '${fromStage}' then`;
+    assert.equal(definitions.get(key)!.slice(definitions.get(key)!.indexOf(marker)),
+      beforeTax.get(key)!.slice(beforeTax.get(key)!.indexOf(marker)));
+  }
+  assert.match(definitions.get(taxKey)!, /stored is not null[\s\S]*'replayed', true/);
+  assert.match(definitions.get(taxKey)!, /activation_round[\s\S]*round_row.round_number \+ 1/);
+  assert.match(definitions.get(taxKey)!, /input_snapshot = p_calculation -> 'input_snapshot'/);
+  assert.match(taxSql, /fn.prosecdef/);
+  assert.match(taxSql, /search_path=pg_catalog/);
+  assert.match(taxSql, /old_count <> 1/);
+  assert.match(taxSql, /grant execute on function public.save_round_tax_result.*to service_role/);
+  assert.doesNotMatch(taxSql, /alter table|update public\.|insert into public\.|mm_fix_round_prepayment/);
 });
 
 test("Round 4 API/UI restore and card entry reuse authoritative IDs, retry keys and stage guards without random draws", () => {
@@ -452,8 +497,10 @@ test("Round 4 API/UI restore and card entry reuse authoritative IDs, retry keys 
   assert.match(read("../app/api/rounds/card-options/route.ts"), /rules.max === 0/);
   assert.match(read("../app/api/rounds/progress/route.ts"), /lookupCard\(row.card_id, category\)/);
   assert.match(read("../app/api/rounds/stage-advance/route.ts"), /!advanceTarget\(body.stage, body.round\)/);
-  assert.match(read("../components/round-dashboard.tsx"), /Life Event and later stages are not available yet/);
+  assert.match(read("../components/round-dashboard.tsx"), /taxCalculated && \(!target \|\| !prepaymentEnabled/);
+  assert.match(read("../components/round-dashboard.tsx"), /Your Round \{round\} tax return is saved\. Tax Prepayment is not available yet/);
+  assert.match(read("../components/tax-calculation.tsx"), /advanceTarget\("deduction", round\)/);
   assert.match(read("../components/round-results.tsx"), /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
   assert.match(read("../app/api/rounds/next-round/route.ts"), /body.round > MAX_PLAYABLE_ROUND/);
-  assert.match(read("./round-tax.ts"), /round.round_number > 3/);
+  assert.match(read("./round-tax.ts"), /round.round_number > 4/);
 });

@@ -70,7 +70,7 @@ export type StageCardRules = { min: number; max: number };
 
 export function isRoundCardStageAvailable(stage: CardStage, round: number): boolean {
   return Number.isInteger(round) && round >= 1 && round <= 4
-    && (round <= 3 || stage === "income-or-retirement")
+    && (round <= 3 || stage !== "tax-prepayment")
     && stage !== "audit-if-triggered";
 }
 
@@ -107,7 +107,7 @@ export function stageInstructionsFor(stage: CardStage, pathwayId: string, round:
       return "Shuffle the Income deck, draw one card, and select the card that matches the one in your hand. As an Entrepreneur you may then draw one additional Income card, but you keep it only if it is Business Income.";
     }
   }
-  if (round >= 1 && round <= 3 && stage === "life-event") {
+  if (isRoundCardStageAvailable(stage, round) && stage === "life-event") {
     const base = stageInstructions[stage];
     return pathwayId === "PATH-003"
       ? `${base} Keep your permanent dependent token: Life Events can never reduce your dependents below one. If the card does not apply to you, return it to the bottom of the deck and draw again.`

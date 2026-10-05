@@ -39,13 +39,13 @@ export function advanceTarget(
   stage: string,
   round: number,
 ): { stage: CardStage | "results-and-life-ledger"; label: string } | null {
-  if (round >= 1 && round <= 3 && stage === "income-or-retirement") {
+  if (round >= 1 && round <= 4 && stage === "income-or-retirement") {
     return { stage: "life-event", label: "Life Event" };
   }
-  if (round >= 1 && round <= 3 && stage === "life-event") {
+  if (round >= 1 && round <= 4 && stage === "life-event") {
     return { stage: "wildcard", label: "Wildcard" };
   }
-  if (round >= 1 && round <= 3 && stage === "wildcard") {
+  if (round >= 1 && round <= 4 && stage === "wildcard") {
     return { stage: "deduction", label: "Deduction" };
   }
   if (round >= 1 && round <= 3 && stage === "deduction") {

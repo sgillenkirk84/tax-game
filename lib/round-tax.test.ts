@@ -4,7 +4,8 @@ import test from "node:test";
 import { buildRoundTaxCalculation, type RoundTaxSnapshot } from "./round-tax.ts";
 import { dependentExpiresAfter } from "./round-rules.ts";
 import { computeRoundResults, economicGrossIncome, toFinalizePayload } from "./round-results.ts";
-import { calculateFederalIncomeTax } from "./game-calculations/calculations.ts";
+import { calculateFederalIncomeTax, calculateEarlyRetirementIncome, calculateGameTax } from "./game-calculations/calculations.ts";
+import workbookData from "./game-data/workbook-data.json" with { type: "json" };
 
 function snapshot(options: {
   round?: number;
@@ -425,4 +426,157 @@ test("Round 3 Entrepreneur rejects extra W-2 and Side Hustler requires both phys
   const invalidEvent = buildRoundTaxCalculation(homeowner);
   assert.ok(!invalidEvent.ok);
   assert.equal(invalidEvent.code, "LIFE_EVENT_INELIGIBLE");
+});
+
+test("all ten saved Round 4 Retirement cards retain authoritative components and use the existing protected-package tax engine", () => {
+  const before = structuredClone(workbookData);
+  const cards = workbookData.cards.filter((card) => card.deck === "Retirement" && card.active === "Yes");
+  assert.equal(cards.length, 10);
+  for (const card of cards) {
+    const input = snapshot({ round: 4, pathway: "PATH-008", income: [String(card.id)] });
+    const restored: RoundTaxSnapshot = JSON.parse(JSON.stringify(input));
+    const result = calculate(restored);
+    const savedCard = record(result.applied.retirement_card);
+    assert.equal(savedCard.deck, "Retirement");
+    assert.equal(savedCard.card_id, card.id);
+    assert.deepEqual(savedCard.income_components, card.incomeComponents);
+    const packageResult = calculateEarlyRetirementIncome({ roundNumber: 4, retirementCardId: String(card.id) });
+    assert.deepEqual(result.applied.retirement_package, packageResult);
+    assert.deepEqual(result.sources, packageResult.incomeSources);
+    const expected = calculateGameTax({
+      incomeSources: packageResult.incomeSources,
+      filingStatus: "SINGLE", otherEligibleItemizedDeduction: 0,
+      pathwayIds: ["PATH-008"],
+    });
+    assert.equal(expected.status, "supported");
+    assert.equal(record(result.round.income_by_category)["w2-wages"], 0);
+    assert.equal(result.round.gross_income, expected.grossIncome);
+    assert.equal(result.round.social_security_included, expected.socialSecurityIncludedInIncome);
+    assert.equal(result.round.adjusted_gross_income, expected.adjustedGrossIncome);
+    assert.equal(result.round.taxable_income, expected.taxableIncome);
+    assert.equal(result.round.tax_before_credits, expected.taxBeforeCredits);
+    assert.equal(result.round.final_tax_liability, expected.finalTax);
+    assert.deepEqual(calculate(restored).calculation, result.calculation, "refresh/retry cannot accumulate income or effects");
+  }
+  assert.deepEqual(workbookData, before);
+});
+
+test("Round 4 mixed retirement scenario taxes only the approved Social Security portion and does not invent component splits", () => {
+  const result = calculate(snapshot({ round: 4, pathway: "PATH-008", income: ["RET-MIX-003"] }));
+  const categories = record(result.round.income_by_category);
+  assert.equal(categories["social-security"], 28000);
+  assert.equal(categories["retirement-or-investment-income"], 32000);
+  assert.equal(categories["retirement-distribution"], 0);
+  assert.equal(categories["w2-wages"], 0);
+  assert.equal(result.round.gross_income, 60000);
+  assert.equal(result.round.social_security_included, 14000);
+  assert.equal(result.round.adjusted_gross_income, 46000);
+  assert.equal(result.round.deduction_amount, 15750);
+  assert.equal(result.round.taxable_income, 30250);
+  assert.equal(result.round.tax_before_credits, 3391.5);
+  assert.equal(result.round.final_tax_liability, 3391.5);
+  assert.equal(result.calculation.tax_prepayment, undefined);
+});
+
+test("Round 4 lower card preserves its distribution component in the saved inputs while the existing $42,000 guarantee wins", () => {
+  const result = calculate(snapshot({ round: 4, pathway: "PATH-008", income: ["RET-MIX-002"] }));
+  const raw = record(result.applied.retirement_card);
+  assert.deepEqual(raw.income_components, workbookData.cards.find((card) => card.id === "RET-MIX-002")!.incomeComponents);
+  assert.ok(Array.isArray(raw.income_components));
+  assert.equal(record(raw.income_components[1]).type, "retirement-distribution");
+  const winning = record(result.applied.retirement_package);
+  assert.equal(winning.annualPackageAmount, 42000);
+  assert.equal(winning.winningRetirementCardId, null);
+  assert.equal(record(result.round.income_by_category)["social-security"], 12000);
+  assert.equal(record(result.round.income_by_category)["retirement-or-investment-income"], 30000);
+  assert.equal(result.round.social_security_included, 6000);
+  assert.equal(result.round.adjusted_gross_income, 36000);
+});
+
+test("Round 4 retirement household keeps marriage/dependents/homeowner state without doubling retirement or recurring investments", () => {
+  for (const lifeCard of ["LIFE-001", "LIFE-004", "LIFE-006"]) {
+    const input = snapshot({ round: 4, pathway: "PATH-008", filing: "MFJ", lifeCard, income: ["RET-MIX-003"], wildcard: "WILD-007" });
+    input.life.homeowner = true;
+    input.effects = [dependent(2), dependent(3, "LIFE-008"), dependent(3, "LIFE-010", "removed")];
+    input.investments = [
+      { source_type: "card-history", source_card_id: "WILD-007", acquired_round: 1, activation_round: 2,
+        recurring_income_per_round: 500, asset_value: 10000, status: "active" },
+      { source_type: "card-history", source_card_id: "WILD-007", acquired_round: 3, activation_round: 4,
+        recurring_income_per_round: 500, asset_value: 10000, status: "active" },
+      { source_type: "card-history", source_card_id: "WILD-007", acquired_round: 4, activation_round: 5,
+        recurring_income_per_round: 500, asset_value: 10000, status: "active" },
+    ];
+    const result = calculate(input);
+    assert.equal(result.round.gross_income, 61000);
+    assert.equal(record(result.round.income_by_category)["investment-income"], 1000);
+    assert.equal(result.applied.recurring_investments_included, 2);
+    assert.equal(result.applied.spouse_income, null);
+    assert.equal(result.applied.homeowner_after, true);
+    assert.equal(result.applied.filing_status_applied, lifeCard === "LIFE-004" ? "HOH" : "MFJ");
+    assert.equal(result.dependents.length, lifeCard === "LIFE-001" ? 2 : lifeCard === "LIFE-006" ? 0 : 1);
+    assert.equal(result.dependents.some((d) => d.sourceCardId === "LIFE-010"), false);
+    assert.deepEqual(result.applied.new_investments, [{ sourceCardId: "WILD-007", value: 10000 }]);
+    assert.deepEqual(calculate(JSON.parse(JSON.stringify(input))).calculation, result.calculation);
+  }
+});
+
+test("all regular-life Round 4 pathways preserve the shared Round 3 Income, household, deduction and credit treatment", () => {
+  for (const pathway of workbookData.pathways.filter((pathway) => pathway.id !== "PATH-008")) {
+    const create = (round: number) => {
+      const input = snapshot({ round, pathway: pathway.id, filing: "MFJ", lifeCard: "LIFE-001", wildcard: "WILD-005",
+        income: ["PATH-002", "PATH-006"].includes(pathway.id) ? ["INC-W2-004", "INC-BIZ-002"] : ["INC-W2-004"] });
+      input.life.homeowner = true;
+      input.cards.find((card) => card.stage === "deduction")!.card_id = "DED-006";
+      input.investments = [{ source_type: "pathway-starting", source_card_id: null, acquired_round: 1, activation_round: 1,
+        recurring_income_per_round: 500, asset_value: 10000, status: "active" }];
+      if (pathway.id === "PATH-001") input.life.corporate_climber_primary = { card_id: "INC-BIZ-004", established_round: 2 };
+      return input;
+    };
+    const prior = calculate(create(3));
+    const current = calculate(create(4));
+    assert.deepEqual(current.round, prior.round);
+    assert.deepEqual(current.sources, prior.sources);
+    assert.equal(current.applied.retirement_card, undefined);
+    assert.equal(current.round.deduction_amount, 39500);
+    assert.equal(record(current.round.income_by_category)["investment-income"], 500);
+    if (pathway.id === "PATH-003") assert.ok(current.dependents.some((d) => d.sourceCardId === "PATH-003"));
+  }
+});
+
+test("Round 4 all ten Wildcards reuse shared treatment and retirement input remains retirement", () => {
+  for (const wildcard of workbookData.cards.filter((card) => card.deck === "Wildcard" && card.active === "Yes")) {
+    const options = { wildcard: String(wildcard.id), choice: wildcard.id === "WILD-004" ? "business" : undefined };
+    const third = calculate(snapshot({ ...options, round: 3 }));
+    const fourth = calculate(snapshot({ ...options, round: 4 }));
+    assert.deepEqual(fourth.round, third.round);
+    assert.deepEqual(fourth.calculation.pending_effects, third.calculation.pending_effects);
+    assert.deepEqual(fourth.calculation.audit_trigger, third.calculation.audit_trigger);
+    const retirement = calculate(snapshot({ ...options, round: 4, pathway: "PATH-008", income: ["RET-MIX-003"] }));
+    assert.equal(record(retirement.round.income_by_category)["social-security"], 28000);
+    assert.equal(retirement.round.social_security_included, 14000);
+  }
+});
+
+test("Round 4 tax rejects wrong card sources, incomplete stages and unsupported years; Round 5 remains closed", () => {
+  const wrongRetirement = buildRoundTaxCalculation(snapshot({ round: 4, pathway: "PATH-008" }));
+  assert.ok(!wrongRetirement.ok);
+  assert.equal(wrongRetirement.code, "UNKNOWN_CARD");
+  const wrongIncome = buildRoundTaxCalculation(snapshot({ round: 4, income: ["RET-MIX-003"] }));
+  assert.ok(!wrongIncome.ok);
+  assert.equal(wrongIncome.code, "UNKNOWN_CARD");
+  for (const stage of ["income-or-retirement", "life-event", "wildcard", "deduction"]) {
+    const input = snapshot({ round: 4, pathway: "PATH-008", income: ["RET-MIX-003"] });
+    input.cards = input.cards.filter((card) => card.stage !== stage);
+    const built = buildRoundTaxCalculation(input);
+    assert.ok(!built.ok);
+    assert.equal(built.code, "INCOMPLETE_ROUND");
+  }
+  const wrongYear = snapshot({ round: 4 });
+  wrongYear.life.tax_year = 2026;
+  const year = buildRoundTaxCalculation(wrongYear);
+  assert.ok(!year.ok);
+  assert.equal(year.code, "TAX_YEAR_NOT_SUPPORTED");
+  const fifth = buildRoundTaxCalculation(snapshot({ round: 5, pathway: "PATH-008", income: ["RET-MIX-003"] }));
+  assert.ok(!fifth.ok);
+  assert.equal(fifth.code, "ROUND_NOT_SUPPORTED");
 });

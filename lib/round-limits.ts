@@ -1,15 +1,17 @@
-// Highest round students may play. Unset means Round 3; explicit limits are clamped to 1..3.
-const HARD_MAX_ROUND = 3;
+import { MAX_PLAYABLE_ROUND } from "./round-rules.ts";
+
+// Round 4 foundation is opt-in; existing unset/empty configuration still opens through Round 3.
+const DEFAULT_MAX_ROUND = 3;
 
 export function parseMaxEnabledRound(value: string | undefined): number {
   if (value === undefined || value.trim() === "") {
-    return HARD_MAX_ROUND;
+    return DEFAULT_MAX_ROUND;
   }
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
     return 1;
   }
-  return Math.min(parsed, HARD_MAX_ROUND);
+  return Math.min(parsed, MAX_PLAYABLE_ROUND);
 }
 
 export function serverMaxEnabledRound(): number {

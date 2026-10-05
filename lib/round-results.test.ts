@@ -216,7 +216,7 @@ test("Results APIs enforce shared availability and next-round RPC requires final
   assert.match(next, /previous_round\.status <> 'finalized'/);
   assert.match(next, /PREVIOUS_ROUND_NOT_FINALIZED/);
   const ui = readFileSync(new URL("../components/round-results.tsx", import.meta.url), "utf8");
-  assert.match(ui, /nextRound <= 3 && nextRound <= clientMaxEnabledRound\(\)/);
+  assert.match(ui, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
   assert.match(ui, /if \(!results\)/);
 });
 
@@ -329,9 +329,9 @@ test("Round 3 read/finish paths require fixed Prepayment and restore without rep
   const resultsUi = read("../components/round-results.tsx");
   assert.match(resultsUi, /finishKey\.current \?\?= crypto\.randomUUID\(\)/);
   assert.match(resultsUi, /if \(body.finalized && body.results\)/);
-  assert.match(resultsUi, /nextRound <= 3 && nextRound <= clientMaxEnabledRound\(\)/);
+  assert.match(resultsUi, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
   const nextApi = read("../app/api/rounds/next-round/route.ts");
-  assert.match(nextApi, /body.round < 2 \|\| body.round > 3/);
+  assert.match(nextApi, /body.round < 2 \|\| body.round > MAX_PLAYABLE_ROUND/);
 });
 
 test("Round 3 restores the fixed $368 payment, household, Caregiver dependent, assets and unresolved Audit", async () => {

@@ -1,5 +1,5 @@
 import { serverMaxEnabledRound } from "@/lib/round-limits";
-import { authorizeNextRound } from "@/lib/round-rules";
+import { authorizeNextRound, MAX_PLAYABLE_ROUND } from "@/lib/round-rules";
 import type { RoundStateRow } from "@/lib/round-state";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
   const maxEnabledRound = serverMaxEnabledRound();
-  if (body.round < 2 || body.round > 3) {
+  if (body.round < 2 || body.round > MAX_PLAYABLE_ROUND) {
     return mapError("STAGE_NOT_SUPPORTED");
   }
   if (body.round > maxEnabledRound) {

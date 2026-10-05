@@ -240,6 +240,11 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                     Your Round {round} Tax Prepayment is saved. Results and Life Ledger are coming next.
                   </p>
                 ) : null}
+                {round === 4 && step.id === "income-or-retirement" && currentSaved ? (
+                  <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+                    Your Round 4 {label} cards are saved. Life Event and later stages are not available yet.
+                  </p>
+                ) : null}
               </li>
             );
           }

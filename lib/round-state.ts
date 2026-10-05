@@ -17,7 +17,7 @@ export type RoundStateResult =
 
 // Authoritative round state for a verified student. Authentication, the active
 // life and the current round and stage all come from the database, never from
-// the browser. get_current_round_state reports the current round (1 to 3); when it
+// the browser. get_current_round_state reports the current round; when it
 // is not installed yet, or the student has no life yet, the Round 1 start RPC is used.
 export async function loadRoundState(
   supabase: StudentSupabase,

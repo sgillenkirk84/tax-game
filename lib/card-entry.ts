@@ -1,4 +1,5 @@
 // Shared, client-safe card-entry definitions. Contains no card data.
+import { getRoundIncomeCardCategory } from "./round-income.ts";
 
 export const CARD_STAGES = [
   "income-or-retirement",
@@ -19,9 +20,6 @@ export type CardCategory =
   | "Deduction"
   | "Tax Prepayment"
   | "Audit Result";
-
-const EARLY_RETIREE_PATHWAY_ID = "PATH-008";
-const EARLY_RETIREMENT_START_ROUND = 4;
 
 const stageCategories: Record<Exclude<CardStage, "income-or-retirement">, CardCategory> = {
   "life-event": "Life Event",
@@ -57,13 +55,10 @@ export function isCardStage(value: unknown): value is CardStage {
   return typeof value === "string" && (CARD_STAGES as readonly string[]).includes(value);
 }
 
-// The deck a student must draw from at a stage. Early Retiree uses Retirement
-// cards instead of Income cards from Round 4.
+// The deck follows shared retirement timing, independent of rollout availability.
 export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: number): CardCategory {
   if (stage === "income-or-retirement") {
-    return pathwayId === EARLY_RETIREE_PATHWAY_ID && round >= EARLY_RETIREMENT_START_ROUND
-      ? "Retirement"
-      : "Income";
+    return getRoundIncomeCardCategory(pathwayId, round);
   }
   return stageCategories[stage];
 }
@@ -73,11 +68,20 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
 // authority; this only decides what to offer on screen. Tax Prepayment is open in Rounds 1-3.
 export type StageCardRules = { min: number; max: number };
 
+export function isRoundCardStageAvailable(stage: CardStage, round: number): boolean {
+  return Number.isInteger(round) && round >= 1 && round <= 4
+    && (round <= 3 || stage === "income-or-retirement")
+    && stage !== "audit-if-triggered";
+}
+
 export function stageCardRules(stage: CardStage, pathwayId: string, round: number): StageCardRules {
-  if (round < 1 || round > 3) {
+  if (!isRoundCardStageAvailable(stage, round)) {
     return { min: 0, max: 0 };
   }
   if (stage === "income-or-retirement") {
+    if (getRoundIncomeCardCategory(pathwayId, round) === "Retirement") {
+      return { min: 1, max: 1 };
+    }
     // Side Hustler draws exactly two Income cards; Entrepreneur may add one
     // optional Business Income card to the one required card.
     if (pathwayId === "PATH-006") {
@@ -92,7 +96,10 @@ export function stageCardRules(stage: CardStage, pathwayId: string, round: numbe
 
 // Pathway-specific student instructions; other stages use stageInstructions.
 export function stageInstructionsFor(stage: CardStage, pathwayId: string, round: number): string {
-  if (round >= 1 && round <= 3 && stage === "income-or-retirement") {
+  if (isRoundCardStageAvailable(stage, round) && stage === "income-or-retirement") {
+    if (getRoundIncomeCardCategory(pathwayId, round) === "Retirement") {
+      return "You are in retirement this round. Physically shuffle the Retirement deck, draw one card, and select the card that matches the one in your hand. Save the Retirement card; its income components remain separate for later tax calculation.";
+    }
     if (pathwayId === "PATH-006") {
       return "Side Hustler: shuffle the Income deck and draw two cards, one at a time. Select each card that matches one in your hand and save it. Both cards count toward your income.";
     }

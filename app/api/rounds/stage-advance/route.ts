@@ -1,5 +1,6 @@
 import { serverRoundEnabled } from "@/lib/round-limits";
 import { isCardStage } from "@/lib/card-entry";
+import { advanceTarget } from "@/lib/round-stages";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
 
@@ -62,6 +63,9 @@ export async function POST(request: Request) {
 
   if (!serverRoundEnabled(body.round as number)) {
     return Response.json({ error: "This round is not available yet." }, { status: 409 });
+  }
+  if (!advanceTarget(body.stage, body.round)) {
+    return Response.json({ error: "Moving on from this stage is not available yet." }, { status: 409 });
   }
 
   const supabase = createStudentSupabaseClient();

@@ -2,6 +2,7 @@ import { serverRoundEnabled } from "@/lib/round-limits";
 import {
   cardIdPattern,
   isCardStage,
+  isRoundCardStageAvailable,
   isValidCardChoice,
   normalizeCardId,
 } from "@/lib/card-entry";
@@ -88,6 +89,9 @@ export async function POST(request: Request) {
 
   if (!serverRoundEnabled(body.round as number)) {
     return Response.json({ error: "This round is not available yet." }, { status: 409 });
+  }
+  if (!isRoundCardStageAvailable(body.stage, body.round)) {
+    return Response.json({ error: "Saving cards is not available for this stage yet." }, { status: 409 });
   }
 
   const supabase = createStudentSupabaseClient();

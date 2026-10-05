@@ -193,3 +193,33 @@ Calculation. `20261005160000_round_three_tax_prepayment.sql` was then manually
 installed successfully in TEST and Production. After refresh, live Round 3 Tax
 Prepayment opened; an actual physical card was selected and saved, and the tax
 due/settlement amount displayed successfully.
+
+## Round 4 opening foundation (TASK 10.15.25)
+
+Round 3 Results and Life Ledger were finalized and live-verified after
+`20261005170000_round_three_results.sql` was manually installed successfully in
+TEST and Production. Rounds 1-3 saved ledger history remains intact.
+
+The shared opening path can start/recover Round 4 only after finalized Round 3.
+It inherits ending cash/debt and preserves the same household, pathway,
+investments and persistent state. Existing expiration applies only to active
+effects whose last active round has passed; removed effects never reappear.
+
+Retirement timing reuses the approved workbook rule: all pathways use Income in
+Rounds 1-3; Early Retiree uses Retirement in Round 4; all pathways use Retirement
+in Round 5. Round 5 is not enabled. Round 4 opens only the first physical-card
+stage: one Retirement card for Early Retiree, existing Income counts/rules for
+other pathways. Saved card IDs retain the authoritative workbook-backed component
+identity; no retirement amount is treated as wages or calculated at card save.
+Existing retirement tax/package helpers remain unchanged for later integration.
+No Round 4 Life Event, tax calculation, Prepayment or Results is enabled.
+
+The user manually installed `20261005180000_round_four_opening.sql` successfully
+in Supabase TEST and Production. It adds the internal shared deck helper and widens only next-round start
+and first-stage card saving; it does not widen stage advancement or rewrite history.
+The maximum supported opening round is 4, but unset/empty round limits still
+default to 3. Explicit limits of 1, 2 or 3 remain respected. The user manually
+changed Vercel `NEXT_PUBLIC_MAX_ENABLED_ROUND` to 4 and `MAX_ENABLED_ROUND` to 4
+before publication. Live Round 4 verification is pending the new Production
+deployment; effective deployed values have not been independently verified.
+TASK 10.15.26 changes no environment values and executes no SQL.

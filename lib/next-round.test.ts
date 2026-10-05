@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { expectedCategoryFor, stageCardRules, stageInstructionsFor } from "./card-entry.ts";
+import { CARD_STAGES, expectedCategoryFor, isRoundCardStageAvailable, stageCardRules, stageInstructionsFor } from "./card-entry.ts";
+import { getRoundIncomeCardCategory, isRetirementRound } from "./round-income.ts";
+import workbookData from "./game-data/workbook-data.json" with { type: "json" };
+import { calculateEarlyRetirementIncome, calculateGameTax, getRetirementStartRound } from "./game-calculations/calculations.ts";
+import { resultsAvailableForRound } from "./round-results.ts";
 import { parseMaxEnabledRound } from "./round-limits.ts";
 import {
   authorizeNextRound,
@@ -35,8 +39,8 @@ test("next-round request permits Round 3 only when enabled", () => {
   assert.deepEqual(authorizeNextRound(finalizedState(2), 3, 3), { ok: true, roundNumber: 3 });
 });
 
-test("next-round request rejects Round 4 and malformed targets", () => {
-  for (const target of [1, 4, 2.5, NaN]) {
+test("next-round request rejects Round 5 and malformed targets", () => {
+  for (const target of [1, 5, 2.5, NaN]) {
     assert.deepEqual(authorizeNextRound(finalizedState(3), target, 5), { ok: false, code: "STAGE_NOT_SUPPORTED" });
   }
 });
@@ -79,10 +83,10 @@ test("Round 3 starts only from a finalized Round 2", () => {
   assert.equal(planStartNextRound({ ...base, currentRound: 1, previousFinalized: true }).action, "reject");
 });
 
-test("a refresh or retry replays the started round; Round 1 and Round 4 are rejected", () => {
+test("a refresh or retry replays the started round; Round 1 and Round 5 are rejected", () => {
   const base = { previousFinalized: true, previousEndingCash: 0, previousEndingDebt: 0 };
   assert.deepEqual(planStartNextRound({ ...base, currentRound: 2, targetRound: 2 }), { action: "replay" });
-  assert.equal(planStartNextRound({ ...base, currentRound: 3, targetRound: 4 }).action, "reject");
+  assert.equal(planStartNextRound({ ...base, currentRound: 4, targetRound: 5 }).action, "reject");
   assert.equal(planStartNextRound({ ...base, currentRound: 1, targetRound: 1 }).action, "reject");
 });
 
@@ -133,7 +137,7 @@ test("Rounds 1 to 3 offer the same card stages including Tax Prepayment", () => 
   }
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 2), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 3), { min: 1, max: 1 });
-  assert.deepEqual(stageCardRules("income-or-retirement", "PATH-004", 4), { min: 0, max: 0 });
+  assert.deepEqual(stageCardRules("income-or-retirement", "PATH-004", 4), { min: 1, max: 1 });
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 3), /two cards/);
 });
 
@@ -149,7 +153,7 @@ test("Rounds 2 and 3 open shared Tax Prepayment and Results", () => {
   assert.equal(advanceTarget("wildcard", 4), null);
 });
 
-test("Round 3 rollout defaults on, respects explicit limits and keeps Round 4 closed", () => {
+test("Round 3 remains the default; Round 4 requires an explicit limit and Round 5 stays closed", () => {
   assert.equal(parseMaxEnabledRound(undefined), 3);
   assert.equal(parseMaxEnabledRound(""), 3);
   assert.equal(parseMaxEnabledRound("  "), 3);
@@ -158,11 +162,12 @@ test("Round 3 rollout defaults on, respects explicit limits and keeps Round 4 cl
   assert.equal(parseMaxEnabledRound("1"), 1);
   assert.equal(parseMaxEnabledRound("2"), 2);
   assert.equal(parseMaxEnabledRound("3"), 3);
-  assert.equal(parseMaxEnabledRound("5"), 3);
+  assert.equal(parseMaxEnabledRound("4"), 4);
+  assert.equal(parseMaxEnabledRound("5"), 4);
   assert.deepEqual(authorizeNextRound(finalizedState(2), 3, parseMaxEnabledRound(undefined)), { ok: true, roundNumber: 3 });
   assert.deepEqual(authorizeNextRound({ ...finalizedState(2), round_status: "in_progress" }, 3, 3),
     { ok: false, code: "PREVIOUS_ROUND_NOT_FINALIZED" });
-  assert.deepEqual(authorizeNextRound(finalizedState(3), 4, 3), { ok: false, code: "STAGE_NOT_SUPPORTED" });
+  assert.deepEqual(authorizeNextRound(finalizedState(3), 4, 3), { ok: false, code: "ROUND_NOT_ENABLED" });
 });
 
 test("visible Round 3 is rejected when the deployment still uses a lower server limit", () => {
@@ -229,7 +234,7 @@ test("Round 3 physical Income and supported stages reuse existing card rules", (
   assert.doesNotMatch(entry, /Math\.random/);
 });
 
-test("Round 3 can advance through shared Results but cannot expose Round 4", () => {
+test("Round 3 can advance through shared Results; Round 4 later stages stay closed", () => {
   assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.equal(advanceTarget("tax-prepayment", 4), null);
@@ -250,4 +255,205 @@ test("Round 3 can advance through shared Results but cannot expose Round 4", () 
 test("Tax Prepayment, Results and Audit are untouched by this migration", () => {
   assert.doesNotMatch(migration, /create or replace function public\.(finalize_round_results|get_round_results|get_round_prepayment|keep_round_prepayment_card)/);
   assert.doesNotMatch(migration, /drop (table|function|constraint)/i);
+});
+
+test("shared retirement card source matches all approved pathways in all five rounds without opening Round 5", () => {
+  for (const pathway of workbookData.pathways) {
+    for (const round of [1, 2, 3, 4, 5]) {
+      const expected = round >= getRetirementStartRound(pathway.id) ? "Retirement" : "Income";
+      assert.equal(getRoundIncomeCardCategory(pathway.id, round), expected);
+      assert.equal(isRetirementRound(pathway.id, round), expected === "Retirement");
+      assert.equal(expectedCategoryFor("income-or-retirement", pathway.id, round), expected);
+    }
+    assert.deepEqual(stageCardRules("income-or-retirement", pathway.id, 5), { min: 0, max: 0 });
+    assert.equal(advanceTarget("income-or-retirement", 5), null);
+  }
+  assert.deepEqual(authorizeNextRound(finalizedState(4), 5, 5), { ok: false, code: "STAGE_NOT_SUPPORTED" });
+  assert.throws(() => getRoundIncomeCardCategory("PATH-999", 4), /Unknown Pathway/);
+});
+
+test("Round 4 requires aligned explicit rollout limits and finalized Round 3; start/recovery keeps inherited balances", () => {
+  const target = 4;
+  assert.equal(parseMaxEnabledRound(undefined), 3);
+  assert.equal(parseMaxEnabledRound(""), 3);
+  assert.deepEqual(authorizeNextRound(finalizedState(3), target, parseMaxEnabledRound("3")),
+    { ok: false, code: "ROUND_NOT_ENABLED" });
+  assert.deepEqual(authorizeNextRound(finalizedState(3), target, parseMaxEnabledRound("4")),
+    { ok: true, roundNumber: 4 });
+  assert.deepEqual(authorizeNextRound({ ...finalizedState(3), round_status: "in_progress" }, target, 4),
+    { ok: false, code: "PREVIOUS_ROUND_NOT_FINALIZED" });
+  assert.deepEqual(authorizeNextRound(finalizedState(2), target, 4),
+    { ok: false, code: "NOT_CURRENT_STAGE" });
+  assert.deepEqual(authorizeNextRound({ ...finalizedState(4), round_status: "in_progress", round_current_stage: "income-or-retirement" }, target, 4),
+    { ok: true, roundNumber: 4 });
+  const input = {
+    currentRound: 3, targetRound: target, previousFinalized: true,
+    previousEndingCash: -1250.75, previousEndingDebt: 8000,
+  };
+  assert.deepEqual(planStartNextRound(input), { action: "start", beginningCash: -1250.75, beginningDebt: 8000 });
+  assert.deepEqual(planStartNextRound({ ...input, previousFinalized: false }),
+    { action: "reject", code: "PREVIOUS_ROUND_NOT_FINALIZED" });
+  assert.deepEqual(planStartNextRound({ ...input, currentRound: 4 }), { action: "replay" });
+});
+
+test("Round 4 opens only first-stage card saving and keeps all regular-life pathway counts", () => {
+  for (const pathway of workbookData.pathways) {
+    const expectedRules = pathway.id === "PATH-006" ? { min: 2, max: 2 }
+      : pathway.id === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
+    assert.deepEqual(stageCardRules("income-or-retirement", pathway.id, 4), expectedRules);
+    assert.equal(isRoundCardStageAvailable("income-or-retirement", 4), true);
+    assert.match(stageInstructionsFor("income-or-retirement", pathway.id, 4), /draw.*card/i);
+    for (const stage of CARD_STAGES.filter((stage) => stage !== "income-or-retirement")) {
+      assert.equal(isRoundCardStageAvailable(stage, 4), false);
+      assert.deepEqual(stageCardRules(stage, pathway.id, 4), { min: 0, max: 0 });
+      assert.equal(advanceTarget(stage, 4), null);
+    }
+    assert.equal(advanceTarget("income-or-retirement", 4), null);
+  }
+  assert.match(stageInstructionsFor("income-or-retirement", "PATH-008", 4), /Physically shuffle the Retirement deck/);
+  assert.doesNotMatch(stageInstructionsFor("income-or-retirement", "PATH-008", 4), /Income deck/);
+  assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 4), /two cards/);
+  assert.match(stageInstructionsFor("income-or-retirement", "PATH-002", 4), /Business Income/);
+  assert.equal(resultsAvailableForRound(4, 4), false);
+});
+
+test("Round 4 boundary expires only effects due now; permanent and Round 3 effects remain and removed effects stay removed", () => {
+  assert.equal(dependentActiveInRound(dependent(2), 4), false);
+  assert.equal(dependentActiveInRound(dependent(3), 4), true);
+  assert.equal(dependentActiveInRound(dependent(3), 5), false);
+  assert.equal(dependentActiveInRound({ status: "active", startsRound: 1, expiresAfterRound: null }, 4), true);
+  for (const status of ["removed", "expired"]) {
+    assert.equal(dependentActiveInRound({ status, startsRound: 3, expiresAfterRound: 4 }, 4), false);
+  }
+  const prior = { id: "INC-BIZ-004", amount: 100000, establishedRound: 3 };
+  assert.deepEqual(resolveClimberPrimary({ id: "INC-W2-004", amount: 50000 }, prior, 4),
+    { card: { id: prior.id, amount: prior.amount }, establishedRound: 3 });
+});
+
+test("physical Retirement card IDs retain workbook component identity after restore; existing tax treatment is not wages", () => {
+  const before = structuredClone(workbookData);
+  const cards = workbookData.cards.filter((card) => card.deck === "Retirement" && card.active === "Yes");
+  assert.equal(cards.length, 10);
+  for (const card of cards) {
+    const saved = { round_number: 4, stage: "income-or-retirement", card_id: card.id, deck: "Retirement" };
+    const restored = JSON.parse(JSON.stringify(saved));
+    const source = workbookData.cards.find((candidate) => candidate.id === restored.card_id)!;
+    assert.equal(source.deck, "Retirement");
+    assert.deepEqual(source.incomeComponents, card.incomeComponents);
+    assert.ok(Array.isArray(source.incomeComponents));
+    assert.equal(source.incomeComponents.reduce((sum, component) => sum + component.amount, 0), source.amount);
+    const retirement = calculateEarlyRetirementIncome({ roundNumber: 4, retirementCardId: String(card.id) });
+    assert.equal(retirement.currentRetirementCardId, card.id);
+    assert.ok(retirement.retirementIncomeSources.every((source) => source.category !== "w2-wages"));
+  }
+  const benefitsOnly = calculateGameTax({
+    incomeSources: [{ category: "social-security", amount: 18000, sourceId: "RET-SSA-001" }],
+    filingStatus: "SINGLE", otherEligibleItemizedDeduction: 0,
+  });
+  assert.equal(benefitsOnly.status, "supported");
+  assert.equal(benefitsOnly.socialSecurityIncludedInIncome, 0);
+  assert.equal(benefitsOnly.incomeByCategory["w2-wages"], 0);
+  const mixed = calculateEarlyRetirementIncome({ roundNumber: 4, retirementCardId: "RET-MIX-003" });
+  assert.deepEqual(mixed.retirementIncomeSources.map((source) => source.category),
+    ["social-security", "retirement-or-investment-income"]);
+  assert.deepEqual(workbookData, before);
+});
+
+test("Round 4 migration patches only start and first-stage card gates in the cumulative installed definitions", () => {
+  const read = (file: string) => readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const extract = (source: string, name: string) => {
+    source = source.replace(/\r\n/g, "\n");
+    const start = source.indexOf(`create or replace function public.${name}(`);
+    const end = source.indexOf("\n$$;", start);
+    assert.ok(start >= 0 && end > start, name);
+    return source.slice(start, end);
+  };
+  const startKey = "public.start_next_round(uuid,text,integer)";
+  const recordKey = "public.record_round_card(uuid,text,integer,text,text,text,uuid,text)";
+  const advanceKey = "public.advance_round_stage(uuid,text,integer,text,uuid)";
+  const finalizerKey = "public.finalize_round_results(uuid,text,integer,uuid,jsonb)";
+  const keepKey = "public.keep_round_prepayment_card(uuid,text,integer,uuid)";
+  const definitions = new Map([
+    [startKey, extract(migration, "start_next_round")],
+    [recordKey, extract(migration, "record_round_card")],
+    [advanceKey, extract(migration, "advance_round_stage")],
+    [finalizerKey, extract(read("20261004090000_round_results.sql"), "finalize_round_results")],
+    [keepKey, extract(read("20261004080000_tax_prepayment.sql"), "keep_round_prepayment_card")],
+  ]);
+  const patch = (file: string, expectedCount: number) => {
+    const sql = read(file);
+    const changes = [...sql.matchAll(/\(\s*'([^']+)',\s*(?:\$old\$([\s\S]*?)\$old\$|'([^']*)'),\s*(?:\$new\$([\s\S]*?)\$new\$|'([^']*)')\s*\)/g)];
+    assert.equal(changes.length, expectedCount);
+    for (const [, signature, oldBlock, oldString, newBlock, newString] of changes) {
+      const source = definitions.get(signature);
+      assert.ok(source, signature);
+      const oldText = oldBlock ?? oldString;
+      assert.equal(source.split(oldText).length - 1, 1, `${file}: ${signature}`);
+      definitions.set(signature, source.replace(oldText, newBlock ?? newString));
+    }
+    return sql;
+  };
+  patch("20261005120000_round_two_tax_prepayment.sql", 3);
+  patch("20261005150000_round_two_results.sql", 6);
+  patch("20261005160000_round_three_tax_prepayment.sql", 3);
+  patch("20261005170000_round_three_results.sql", 2);
+  const before = new Map(definitions);
+  const sql = patch("20261005180000_round_four_opening.sql", 2);
+  const start = definitions.get(startKey)!;
+  assert.equal(start, before.get(startKey)!.replace("p_round_number not between 2 and 3", "p_round_number not between 2 and 4"));
+  assert.match(start, /previous_round.status <> 'finalized'/);
+  assert.match(start, /previous_round.ending_cash_resources,\s+previous_round.ending_student_loan_debt/);
+  assert.match(start, /effect.status = 'active'[\s\S]*effect.expires_after_round < p_round_number/);
+  assert.match(start, /current_stage = 'income-or-retirement'/);
+  assert.match(start, /life_row.current_round = p_round_number[\s\S]*was_replayed := true/);
+  assert.doesNotMatch(start, /set filing_status|set homeowner|mm_game_investments|set persistent_state|finalize_round_results/);
+  const record = definitions.get(recordKey)!;
+  const oldIncomeStart = before.get(recordKey)!.indexOf("      required_deck :=");
+  const oldIncomeEnd = before.get(recordKey)!.indexOf("\n    when 'life-event'", oldIncomeStart);
+  const newIncomeStart = record.indexOf("      required_deck :=");
+  const newIncomeEnd = record.indexOf("\n    when 'life-event'", newIncomeStart);
+  assert.equal(record.slice(0, newIncomeStart), before.get(recordKey)!.slice(0, oldIncomeStart));
+  assert.equal(record.slice(newIncomeEnd), before.get(recordKey)!.slice(oldIncomeEnd));
+  assert.match(record, /public.mm_round_income_deck\(life_row.pathway_id, life_row.current_round\)/);
+  assert.match(record, /current_round not between 1 and 4 then 0/);
+  assert.match(record, /required_deck = 'Retirement' then 1/);
+  assert.match(record, /catalog_row.deck <> required_deck or catalog_row.stage <> p_stage/);
+  assert.match(record, /normalized_card_id not like 'INC-BIZ-%'/);
+  assert.match(record, /saved_count >= stage_card_limit/);
+  assert.match(record, /IDEMPOTENCY_KEY_REUSED/);
+  assert.ok(record.indexOf("if found then") < record.indexOf("insert into public.mm_game_card_history"));
+  for (const key of [advanceKey, finalizerKey, keepKey]) {
+    assert.equal(definitions.get(key), before.get(key), key);
+  }
+  assert.match(sql, /p_round_number = 5 or \(p_pathway_id = 'PATH-008' and p_round_number = 4\)/);
+  assert.match(sql, /revoke all on function public.mm_round_income_deck/);
+  assert.doesNotMatch(sql, /grant execute on function public.mm_round_income_deck/);
+  assert.match(sql, /fn.prosecdef/);
+  assert.match(sql, /search_path=pg_catalog/);
+  assert.match(sql, /old_count <> 1/);
+  assert.match(sql, /grant execute on function public.start_next_round.*to service_role/);
+  assert.match(sql, /grant execute on function public.record_round_card.*to anon/);
+  assert.doesNotMatch(sql, /alter table|update public\.|insert into public\.|mm_fix_round_prepayment/);
+});
+
+test("Round 4 API/UI restore and card entry reuse authoritative IDs, retry keys and stage guards without random draws", () => {
+  const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
+  const entry = read("../components/card-entry.tsx");
+  assert.match(entry, /setSavedCards\(previous\)/);
+  assert.match(entry, /idempotencyKey.current \?\?= crypto.randomUUID\(\)/);
+  assert.match(entry, /cardId: card.id/);
+  assert.doesNotMatch(entry, /Math.random|incomeSources|calculateEarlyRetirementIncome|w2-wages/);
+  const lookup = read("./card-lookup.ts");
+  assert.match(lookup, /card.deck !== expectedCategory/);
+  assert.doesNotMatch(lookup, /Math.random|w2-wages/);
+  for (const file of ["card-preview", "card-save"]) {
+    assert.match(read(`../app/api/rounds/${file}/route.ts`), /isRoundCardStageAvailable/);
+  }
+  assert.match(read("../app/api/rounds/card-options/route.ts"), /rules.max === 0/);
+  assert.match(read("../app/api/rounds/progress/route.ts"), /lookupCard\(row.card_id, category\)/);
+  assert.match(read("../app/api/rounds/stage-advance/route.ts"), /!advanceTarget\(body.stage, body.round\)/);
+  assert.match(read("../components/round-dashboard.tsx"), /Life Event and later stages are not available yet/);
+  assert.match(read("../components/round-results.tsx"), /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
+  assert.match(read("../app/api/rounds/next-round/route.ts"), /body.round > MAX_PLAYABLE_ROUND/);
+  assert.match(read("./round-tax.ts"), /round.round_number > 3/);
 });

@@ -2,6 +2,7 @@ import {
   cardIdPattern,
   expectedCategoryFor,
   isCardStage,
+  isRoundCardStageAvailable,
   normalizeCardId,
 } from "@/lib/card-entry";
 import { lookupCard } from "@/lib/card-lookup";
@@ -56,6 +57,9 @@ export async function POST(request: Request) {
   const state = loaded.state;
   if (body.round !== state.life_current_round || body.stage !== state.round_current_stage) {
     return Response.json({ error: "That is not the current stage of your round." }, { status: 409 });
+  }
+  if (!isRoundCardStageAvailable(body.stage, state.life_current_round)) {
+    return Response.json({ error: "Card entry is not available for this stage yet." }, { status: 409 });
   }
 
   const expectedCategory = expectedCategoryFor(body.stage, state.pathway_id, state.life_current_round);

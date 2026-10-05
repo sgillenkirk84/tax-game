@@ -86,6 +86,9 @@ export async function POST(request: Request) {
   }
 
   const rules = stageCardRules(body.stage, state.pathway_id, state.life_current_round);
+  if (rules.max === 0) {
+    return Response.json({ error: "Card entry is not available for this stage yet." }, { status: 409 });
+  }
   return Response.json({
     category,
     cards: listDeckCards(category),

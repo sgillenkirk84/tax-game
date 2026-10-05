@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import type { StoredResults } from "@/lib/round-results";
 import { clientMaxEnabledRound } from "@/lib/round-limits";
+import { MAX_PLAYABLE_ROUND } from "@/lib/round-rules";
 import LifeLedger from "@/components/life-ledger";
 
 type RoundResultsProps = {
@@ -85,7 +86,7 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const nextRound = round + 1;
-  const nextEnabled = nextRound <= 3 && nextRound <= clientMaxEnabledRound();
+  const nextEnabled = nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound();
 
   const restore = useCallback(async () => {
     try {

@@ -321,3 +321,74 @@ test("finalized rounds are rejected and existing saved calculations remain repla
   const route = readFileSync(new URL("../app/api/rounds/tax-calculate/route.ts", import.meta.url), "utf8");
   assert.ok(route.indexOf("if (snapshot.round.calculation)") < route.indexOf("const built = buildRoundTaxCalculation"));
 });
+
+for (const pathway of ["PATH-001", "PATH-002", "PATH-003", "PATH-004", "PATH-005", "PATH-006", "PATH-007", "PATH-008"]) {
+  test(`Round 3 ${pathway} uses shared Income, household and persistent investment rules`, () => {
+    const income = pathway === "PATH-002" || pathway === "PATH-006"
+      ? ["INC-W2-004", "INC-BIZ-002"] : ["INC-W2-004"];
+    const input = snapshot({ round: 3, pathway, filing: "MFJ", lifeCard: "LIFE-001", income });
+    input.life.homeowner = true;
+    input.life.cash_resources = 14250;
+    input.life.student_loan_debt = 12000;
+    input.round.beginning_cash_resources = 14250;
+    input.round.beginning_student_loan_debt = 12000;
+    input.effects = [dependent(1), dependent(2, "LIFE-008"), dependent(2, "LIFE-010", "removed")];
+    input.investments = [{
+      source_type: "card-history", source_card_id: "WILD-007", acquired_round: 2,
+      activation_round: 3, recurring_income_per_round: 500, asset_value: 10000, status: "active",
+    }];
+    if (pathway === "PATH-001") {
+      input.life.corporate_climber_primary = { card_id: "INC-BIZ-004", established_round: 2 };
+    }
+    const result = calculate(input);
+    assert.equal(result.applied.filing_status_applied, "MFJ");
+    assert.equal(result.dependents.length, pathway === "PATH-003" ? 3 : 2);
+    assert.equal(result.dependents.some((d) => d.sourceCardId === "LIFE-010"), false);
+    assert.equal(result.round.investment_asset_value, 10000);
+    const categories = record(result.round.income_by_category);
+    assert.equal(categories["investment-income"], 500);
+    assert.equal(categories["w2-wages"], pathway === "PATH-001" ? 0 : 100000);
+    if (pathway === "PATH-001") assert.equal(categories["business-net-income"], 100000);
+    if (income.length === 2) assert.equal(categories["business-net-income"], 25000);
+    assert.equal(result.round.gross_income, income.length === 2 ? 125500 : 100500);
+    assert.equal(result.applied.homeowner_before, true);
+    assert.equal(result.applied.homeowner_after, true);
+    if (pathway === "PATH-001") {
+      assert.deepEqual(result.calculation.persistent_updates, {
+        corporate_climber_primary: { card_id: "INC-BIZ-004", established_round: 2 },
+      });
+    }
+    assert.equal(result.sources.some((source) => source.category === "social-security" || source.category === "pension-income"), false);
+  });
+}
+
+for (const wildcard of ["WILD-001", "WILD-002", "WILD-003", "WILD-004", "WILD-005", "WILD-006", "WILD-007", "WILD-008", "WILD-009", "WILD-010"]) {
+  test(`Round 3 ${wildcard} and Deduction reuse Round 2 treatment without new formulas`, () => {
+    const second = snapshot({ round: 2, wildcard, choice: wildcard === "WILD-004" ? "business" : undefined });
+    const third = snapshot({ round: 3, wildcard, choice: wildcard === "WILD-004" ? "business" : undefined });
+    for (const input of [second, third]) {
+      input.cards.find((card) => card.stage === "deduction")!.card_id = "DED-006";
+    }
+    const prior = calculate(second);
+    const result = calculate(third);
+    assert.deepEqual(result.round, prior.round);
+    assert.equal(result.round.standard_deduction, 15750);
+    assert.equal(result.round.deduction_amount, 23750);
+    assert.deepEqual(result.calculation.pending_effects, prior.calculation.pending_effects);
+    assert.deepEqual(result.calculation.audit_trigger, prior.calculation.audit_trigger);
+  });
+}
+
+test("Round 3 Entrepreneur rejects extra W-2 and Side Hustler requires both physical Income cards", () => {
+  const entrepreneur = buildRoundTaxCalculation(snapshot({ round: 3, pathway: "PATH-002", income: ["INC-W2-004", "INC-W2-001"] }));
+  assert.ok(!entrepreneur.ok);
+  assert.equal(entrepreneur.code, "INCOMPLETE_ROUND");
+  const hustler = buildRoundTaxCalculation(snapshot({ round: 3, pathway: "PATH-006", income: ["INC-W2-004"] }));
+  assert.ok(!hustler.ok);
+  assert.equal(hustler.code, "INCOMPLETE_ROUND");
+  const homeowner = snapshot({ round: 3, lifeCard: "LIFE-005" });
+  homeowner.life.homeowner = true;
+  const invalidEvent = buildRoundTaxCalculation(homeowner);
+  assert.ok(!invalidEvent.ok);
+  assert.equal(invalidEvent.code, "LIFE_EVENT_INELIGIBLE");
+});

@@ -129,3 +129,23 @@ the existing Results endpoint; current Results and all financial calculations
 remain unchanged. Unfinished rounds and fields absent from older snapshots show
 a dash, never a recalculated value. The table preserves its columns on narrow
 screens inside a keyboard-focusable horizontal scroll region.
+
+## Round 3 beta rollout (TASK 10.15.16)
+
+Unset or empty `MAX_ENABLED_ROUND` and `NEXT_PUBLIC_MAX_ENABLED_ROUND` now default
+to 3. Explicit lower limits are respected, invalid values retain the safe Round 1
+fallback, and the hard maximum remains 3. No environment settings are changed.
+Deployments explicitly configured below 3 must raise both existing limits
+separately to offer Round 3.
+
+Round 3 starts only after finalized Round 2 and reuses the installed shared
+Income, Life Event, Wildcard and Deduction flow. Opening cash/debt come from
+Round 2 ending balances; household, pathway and investments remain on the same
+life. Expired temporary effects are marked expired without rewriting historical
+snapshots; Round 2 dependents remain active through Round 3 and the Caregiver
+permanent dependent never expires. Early Retiree still draws Income in Round 3.
+
+The existing shared tax calculation remains available after Deduction. The
+round stays at Deduction: Round 3 Tax Prepayment and Results remain closed in
+the existing application/database gates. Round 4 remains unavailable. No new
+formulas, database changes or migration are required.

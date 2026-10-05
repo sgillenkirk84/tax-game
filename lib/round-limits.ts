@@ -1,7 +1,10 @@
-// Highest round students may play. Unset means Round 1 only; values are clamped to 1..3.
+// Highest round students may play. Unset means Round 3; explicit limits are clamped to 1..3.
 const HARD_MAX_ROUND = 3;
 
 export function parseMaxEnabledRound(value: string | undefined): number {
+  if (value === undefined || value.trim() === "") {
+    return HARD_MAX_ROUND;
+  }
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
     return 1;

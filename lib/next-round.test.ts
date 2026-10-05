@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { stageCardRules, stageInstructionsFor } from "./card-entry.ts";
+import { expectedCategoryFor, stageCardRules, stageInstructionsFor } from "./card-entry.ts";
 import { parseMaxEnabledRound } from "./round-limits.ts";
 import {
   authorizeNextRound,
@@ -149,14 +149,69 @@ test("Round 2 opens Tax Prepayment and Results; Round 3 stops after Tax Calculat
   assert.equal(advanceTarget("wildcard", 4), null);
 });
 
-test("the round limit defaults to Round 1 and is clamped to Rounds 1 to 3", () => {
-  assert.equal(parseMaxEnabledRound(undefined), 1);
-  assert.equal(parseMaxEnabledRound(""), 1);
+test("Round 3 rollout defaults on, respects explicit limits and keeps Round 4 closed", () => {
+  assert.equal(parseMaxEnabledRound(undefined), 3);
+  assert.equal(parseMaxEnabledRound(""), 3);
+  assert.equal(parseMaxEnabledRound("  "), 3);
   assert.equal(parseMaxEnabledRound("abc"), 1);
   assert.equal(parseMaxEnabledRound("0"), 1);
+  assert.equal(parseMaxEnabledRound("1"), 1);
   assert.equal(parseMaxEnabledRound("2"), 2);
   assert.equal(parseMaxEnabledRound("3"), 3);
   assert.equal(parseMaxEnabledRound("5"), 3);
+  assert.deepEqual(authorizeNextRound(finalizedState(2), 3, parseMaxEnabledRound(undefined)), { ok: true, roundNumber: 3 });
+  assert.deepEqual(authorizeNextRound({ ...finalizedState(2), round_status: "in_progress" }, 3, 3),
+    { ok: false, code: "PREVIOUS_ROUND_NOT_FINALIZED" });
+  assert.deepEqual(authorizeNextRound(finalizedState(3), 4, 3), { ok: false, code: "STAGE_NOT_SUPPORTED" });
+});
+
+test("Round 3 handoff preserves balances and life state without rewriting finalized history", () => {
+  const previous = { currentRound: 2, targetRound: 3, previousFinalized: true, previousEndingCash: 14250.75, previousEndingDebt: 12000 };
+  const before = structuredClone(previous);
+  assert.deepEqual(planStartNextRound(previous), { action: "start", beginningCash: 14250.75, beginningDebt: 12000 });
+  assert.deepEqual(previous, before);
+  const start = migration.slice(migration.indexOf("create or replace function public.start_next_round("), migration.indexOf("create or replace function public.get_current_round_state("));
+  assert.match(start, /previous_round\.status <> 'finalized'/);
+  assert.match(start, /previous_round\.ending_cash_resources,\s*previous_round\.ending_student_loan_debt/);
+  assert.match(start, /effect\.status = 'active'[\s\S]*effect\.expires_after_round < p_round_number/);
+  assert.doesNotMatch(start, /update public\.mm_game_rounds|update public\.mm_game_life_ledger|update public\.mm_game_investments/);
+  assert.doesNotMatch(start, /set filing_status|set homeowner|set pathway_id|set corporate_climber_primary/);
+  const schema = readFileSync(new URL("../supabase/migrations/20261003200000_replayable_game_schema.sql", import.meta.url), "utf8");
+  assert.match(schema, /GAME_ROUND_FINALIZED/);
+  assert.match(schema, /GAME_LEDGER_IMMUTABLE/);
+});
+
+test("Round 3 physical Income and supported stages reuse existing card rules", () => {
+  for (const pathway of ["PATH-001", "PATH-002", "PATH-003", "PATH-004", "PATH-005", "PATH-006", "PATH-007", "PATH-008"]) {
+    assert.equal(expectedCategoryFor("income-or-retirement", pathway, 3), "Income");
+    assert.deepEqual(stageCardRules("income-or-retirement", pathway, 3),
+      pathway === "PATH-006" ? { min: 2, max: 2 } : pathway === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 });
+    assert.match(stageInstructionsFor("income-or-retirement", pathway, 3), /draw|hand/);
+    for (const stage of ["life-event", "wildcard", "deduction"] as const) {
+      assert.deepEqual(stageCardRules(stage, pathway, 3), { min: 1, max: 1 });
+      assert.match(stageInstructionsFor(stage, pathway, 3), /draw.*card/);
+    }
+  }
+  assert.equal(expectedCategoryFor("income-or-retirement", "PATH-008", 4), "Retirement");
+  const entry = readFileSync(new URL("../components/card-entry.tsx", import.meta.url), "utf8");
+  assert.match(entry, /\/api\/rounds\/card-save/);
+  assert.doesNotMatch(entry, /Math\.random/);
+});
+
+test("Round 3 cannot advance beyond Deduction or expose Prepayment and Results", () => {
+  assert.equal(advanceTarget("deduction", 3), null);
+  assert.equal(advanceTarget("tax-prepayment", 3), null);
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 0, max: 0 });
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const prepaymentMigration = read("../supabase/migrations/20261005120000_round_two_tax_prepayment.sql");
+  assert.match(prepaymentMigration, /when life_row\.current_round not between 1 and 2 then 0/);
+  assert.match(prepaymentMigration, /when 'deduction' then\n      if life_row\.current_round between 1 and 2 then/);
+  const resultsMigration = read("../supabase/migrations/20261005150000_round_two_results.sql");
+  assert.match(resultsMigration, /if life_row\.current_round not between 1 and 2 then/);
+  assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 2/);
+  assert.match(read("./round-results.ts"), /round <= 2 && round <= maxEnabledRound/);
+  const dashboard = read("../components/round-dashboard.tsx");
+  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 2/);
 });
 
 test("Tax Prepayment, Results and Audit are untouched by this migration", () => {

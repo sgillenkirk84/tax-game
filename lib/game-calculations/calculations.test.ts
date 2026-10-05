@@ -24,6 +24,7 @@ import type { GameDataset } from "../game-data/types";
 import { calculatePrepaymentDollars, settlementPreview } from "../tax-prepayment.ts";
 
 const prepaymentCases = [
+  { name: "live PRE-006 with fully offset tax", before: 350, credits: 350, final: 0, rate: 1.05, prepaid: 368, refund: 368, due: 0 },
   { name: "credits reduce tax to zero", before: 1757, credits: 1757, final: 0, rate: 0.8, prepaid: 1406, refund: 1406, due: 0 },
   { name: "no credits", before: 1000, credits: 0, final: 1000, rate: 0.8, prepaid: 800, refund: 0, due: 200 },
   { name: "partial credits", before: 2000, credits: 500, final: 1500, rate: 0.8, prepaid: 1600, refund: 100, due: 0 },

@@ -81,3 +81,15 @@ Results/Life Ledger snapshots are not recalculated. Legacy fixed payments
 retain an explicit previous-basis label rather than being presented as corrected.
 The normalized workbook rules record this approved override; the original
 workbook file and source cells remain unchanged for provenance.
+
+### Tax Prepayment save correction (TASK 10.15.09)
+
+`20261005140000_fix_precredit_prepayment_save.sql` replaces only the internal
+helper to rename its local pre-credit variable. Previously, `tax_before_credits`
+collided with the table column of the same name inside the UPDATE, producing a
+PL/pgSQL ambiguous-column error under the default conflict policy and rolling
+back the card save. The signature, JSON keys, security, retry behavior and
+pre-credit calculation rule are unchanged. $350 before credits, $350 credits
+and PRE-006 (105%) produce $368 prepaid and a $368 refund before later adjustments.
+This migration needs manual review/installation; no SQL has been executed.
+Existing fixed payments and finalized history are not changed.

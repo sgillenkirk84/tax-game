@@ -4,6 +4,7 @@ import test from "node:test";
 import dataset from "./game-data/workbook-data.json" with { type: "json" };
 import { isValidCardChoice, stageCardRules } from "./card-entry.ts";
 import { advanceTarget } from "./round-stages.ts";
+import { computeRoundResults } from "./round-results.ts";
 import {
   calculatePrepaymentDollars,
   canRedraw,
@@ -20,6 +21,59 @@ test("settlement preview shows a refund, an amount due, or exactly settled", () 
 });
 
 const cards = dataset.cards.filter((card) => card.deck === "Tax Prepayment" && card.active === "Yes");
+
+test("PRE-006 live case restores the fixed $368 payment independently of zero final tax", () => {
+  const prepaid = calculatePrepaymentDollars(350, PREPAYMENT_RATES_PCT["PRE-006"]);
+  assert.equal(prepaid, 368);
+  const stored = {
+    round_number: 2, calculated_tax: 0, tax_before_credits: 350, credits_applied: 350,
+    cards: [{ card_id: "PRE-006", rate_pct: 105 }],
+    prepayment: {
+      card_id: "PRE-006", rate_pct: 105, prepaid_amount: prepaid, calculated_tax: 0,
+      calculation_base: "income-tax-before-credits", tax_before_credits: 350,
+    },
+  };
+  const restored = summarizePrepayment(JSON.parse(JSON.stringify(stored)));
+  assert.equal(restored?.status, "fixed");
+  assert.equal(restored?.fixed?.prepaidAmount, 368);
+  assert.equal(restored?.fixed?.ratePct, 105);
+  assert.equal(restored?.fixed?.baseAmount, 350);
+  assert.equal(restored?.creditsApplied, 350);
+  assert.equal(restored?.calculatedTax, 0);
+  assert.deepEqual(settlementPreview(0, restored.fixed.prepaidAmount), { kind: "refund", amount: 368 });
+  const results = computeRoundResults({
+    beginningCash: 0, beginningDebt: 0, grossIncome: 35000, adjustedGrossIncome: 35000,
+    finalTax: restored.calculatedTax, fixedPrepayment: restored.fixed.prepaidAmount, pendingEffects: [],
+  });
+  assert.equal(results.taxPrepaid, 368);
+  assert.equal(results.calculatedTax, 0);
+  assert.equal(results.taxRefund, 368);
+  assert.equal(results.taxAmountDue, 0);
+});
+
+test("save correction only renames the ambiguous local variable and preserves the RPC contract", () => {
+  const read = (name: string) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const previous = read("20261005130000_precredit_tax_prepayment.sql");
+  const corrected = read("20261005140000_fix_precredit_prepayment_save.sql");
+  const helper = (sql: string) => {
+    const start = sql.indexOf("create or replace function public.mm_fix_round_prepayment(");
+    const end = sql.indexOf("\n$$;", start);
+    assert.ok(start >= 0 && end > start);
+    return sql.slice(start, end);
+  };
+  // Rename only unqualified variable identifiers, not JSON keys or qualified columns.
+  const expected = helper(previous).replace(/(?<![.'\w])tax_before_credits(?!['\w])/g, "v_tax_before_credits");
+  assert.equal(helper(corrected), expected);
+  const update = helper(corrected).split("update public.mm_game_rounds as game_round")[1];
+  assert.match(update, /'tax_before_credits', v_tax_before_credits/);
+  assert.doesNotMatch(update, /(?<![.'\w])tax_before_credits(?!['\w])/);
+  assert.match(corrected, /round\(v_tax_before_credits \* p_rate_pct \/ 100, 0\)/);
+  assert.match(corrected, /PREPAYMENT_ALREADY_FIXED/);
+  assert.match(corrected, /from public, anon, authenticated, service_role/);
+  assert.doesNotMatch(corrected, /grant execute|alter table|finalize_round_results/);
+  const caller = read("20261004100000_next_round.sql");
+  assert.match(caller, /perform public\.mm_fix_round_prepayment\(\s*round_row\.id, history_row\.id, history_row\.card_id, catalog_row\.prepayment_rate_pct, null, false\s*\)/);
+});
 
 test("all 10 Tax Prepayment card rates match the workbook and the migration", () => {
   assert.equal(cards.length, 10);

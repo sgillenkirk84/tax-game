@@ -34,7 +34,7 @@ export function flowIndex(stage: string): number {
 
 // The next persisted stage a student can be advanced to, or null. Mirrors
 // advance_round_stage, which remains the authority; this only decides whether
-// to offer the Continue action. Rounds 1 to 3 run through Deduction; Prepayment and Results are Round 1 only for now.
+// to offer the Continue action. Prepayment opens in Rounds 1-2; Results stays Round 1 only.
 export function advanceTarget(
   stage: string,
   round: number,
@@ -48,7 +48,7 @@ export function advanceTarget(
   if (round >= 1 && round <= 3 && stage === "wildcard") {
     return { stage: "deduction", label: "Deduction" };
   }
-  if (round === 1 && stage === "deduction") {
+  if ((round === 1 || round === 2) && stage === "deduction") {
     return { stage: "tax-prepayment", label: "Tax Prepayment" };
   }
   if (round === 1 && stage === "tax-prepayment") {

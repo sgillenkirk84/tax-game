@@ -122,7 +122,7 @@ test("Corporate Climber keeps the retained card unless the new one pays more", (
   });
 });
 
-test("Rounds 1 to 3 offer the same card stages; Prepayment stays Round 1", () => {
+test("Rounds 1 to 3 offer the same card stages; Prepayment opens in Rounds 1-2", () => {
   for (const round of [1, 2, 3]) {
     assert.deepEqual(stageCardRules("income-or-retirement", "PATH-004", round), { min: 1, max: 1 });
     assert.deepEqual(stageCardRules("income-or-retirement", "PATH-006", round), { min: 2, max: 2 });
@@ -131,17 +131,18 @@ test("Rounds 1 to 3 offer the same card stages; Prepayment stays Round 1", () =>
     assert.deepEqual(stageCardRules("wildcard", "PATH-004", round), { min: 1, max: 1 });
     assert.deepEqual(stageCardRules("deduction", "PATH-004", round), { min: 1, max: 1 });
   }
-  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 2), { min: 0, max: 0 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 2), { min: 1, max: 1 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 3), { min: 0, max: 0 });
   assert.deepEqual(stageCardRules("income-or-retirement", "PATH-004", 4), { min: 0, max: 0 });
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 3), /two cards/);
 });
 
-test("Continue is offered through Deduction in Rounds 2 and 3 but never past Tax Calculation", () => {
+test("Round 2 opens Tax Prepayment but not Results; Round 3 stops after Tax Calculation", () => {
   for (const round of [2, 3]) {
     assert.equal(advanceTarget("income-or-retirement", round)?.stage, "life-event");
     assert.equal(advanceTarget("life-event", round)?.stage, "wildcard");
     assert.equal(advanceTarget("wildcard", round)?.stage, "deduction");
-    assert.equal(advanceTarget("deduction", round), null);
+    assert.equal(advanceTarget("deduction", round)?.stage ?? null, round === 2 ? "tax-prepayment" : null);
     assert.equal(advanceTarget("tax-prepayment", round), null);
   }
   assert.equal(advanceTarget("deduction", 1)?.stage, "tax-prepayment");

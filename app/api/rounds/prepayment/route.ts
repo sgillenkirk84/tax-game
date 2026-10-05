@@ -2,6 +2,7 @@ import { lookupCard } from "@/lib/card-lookup";
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createServiceSupabaseClient } from "@/lib/service-supabase";
 import { summarizePrepayment } from "@/lib/tax-prepayment";
+import { serverRoundEnabled } from "@/lib/round-limits";
 
 // Read-only recovery of the Tax Prepayment state after a refresh. It never
 // writes. It uses the service-only get_round_prepayment RPC, which verifies the
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
   const credentials = body && readStudentCredentials(body);
   if (!body || !credentials || typeof body.round !== "number" || !Number.isInteger(body.round)) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+  if (!serverRoundEnabled(body.round) || body.round > 2) {
+    return Response.json({ error: "Tax Prepayment is not available for this round yet." }, { status: 409 });
   }
 
   const supabase = createServiceSupabaseClient();

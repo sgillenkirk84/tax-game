@@ -1,5 +1,6 @@
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createStudentSupabaseClient } from "@/lib/student-supabase";
+import { serverRoundEnabled } from "@/lib/round-limits";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,6 +47,10 @@ export async function POST(request: Request) {
     !uuidPattern.test(body.idempotencyKey)
   ) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!serverRoundEnabled(body.round) || body.round > 2) {
+    return Response.json({ error: "Tax Prepayment is not available for this round yet." }, { status: 409 });
   }
 
   const supabase = createStudentSupabaseClient();

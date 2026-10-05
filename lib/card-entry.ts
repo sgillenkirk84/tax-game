@@ -70,11 +70,11 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
 
 // Cards a student must save before continuing (min) and may save (max) at a
 // stage. Mirrors record_round_card and advance_round_stage, which remain the
-// authority; this only decides what to offer on screen. Rounds 1 to 3; Tax Prepayment is Round 1 only.
+// authority; this only decides what to offer on screen. Tax Prepayment is open in Rounds 1-2.
 export type StageCardRules = { min: number; max: number };
 
 export function stageCardRules(stage: CardStage, pathwayId: string, round: number): StageCardRules {
-  if (round < 1 || round > 3 || (stage === "tax-prepayment" && round !== 1)) {
+  if (round < 1 || round > 3 || (stage === "tax-prepayment" && round > 2)) {
     return { min: 0, max: 0 };
   }
   if (stage === "income-or-retirement") {

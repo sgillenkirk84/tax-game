@@ -213,7 +213,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                         {advanceError}
                       </p>
                     ) : null}
-                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round === 1)) ? (
+                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round <= 2)) ? (
                       <button
                         type="button"
                         onClick={() => void advance()}
@@ -223,7 +223,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
                     ) : step.id === "deduction" ? (
-                      taxCalculated && round > 1 ? (
+                      taxCalculated && round > 2 ? (
                         <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                           Your Round {round} tax return is saved. Tax Prepayment and Results for this round are coming soon.
                         </p>
@@ -234,6 +234,11 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                       </p>
                     )}
                   </div>
+                ) : null}
+                {step.id === "tax-prepayment" && round === 2 && prepaymentFixed ? (
+                  <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+                    Your Round 2 Tax Prepayment is saved. Results and Life Ledger are coming next.
+                  </p>
                 ) : null}
               </li>
             );

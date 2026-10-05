@@ -48,3 +48,17 @@ tax-income reduction and one $5,000 cash expense.
 Existing saved calculations and finalized Results/Life Ledger snapshots are
 not recalculated or backfilled. Round 2/3 Results and their persistent household
 handoff remain outside the current through-Tax-Calculation foundation.
+
+## Round 2 Tax Prepayment milestone
+
+After saved Deduction and Tax Calculation, Round 2 offers Continue to Tax
+Prepayment using the existing stage-advance RPC. The student physically draws
+a card, selects its matching workbook entry, and confirms it. The existing
+save RPC fixes prepayment from saved tax and the catalog rate, including the
+Corporate Climber's optional one-time redraw below 90%. No cash is settled at
+this stage. Refresh restores the same saved card and amount.
+
+The additive `20261005120000_round_two_tax_prepayment.sql` migration must be
+reviewed and manually installed before testing the transition. Existing stage
+and prepayment flags plus the enabled-round limit still apply. Round 2 Results
+and Round 3 Tax Prepayment remain closed.

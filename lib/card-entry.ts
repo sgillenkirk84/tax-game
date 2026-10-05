@@ -68,10 +68,45 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
   return stageCategories[stage];
 }
 
-// Maximum cards a student may save at a stage. Mirrors record_round_card, which
-// remains the authority; this only decides whether to offer the save button.
-export function stageCardLimit(stage: CardStage, round: number): number {
-  return (stage === "income-or-retirement" || stage === "life-event" || stage === "wildcard" || stage === "deduction") && round === 1 ? 1 : 0;
+// Cards a student must save before continuing (min) and may save (max) at a
+// stage. Mirrors record_round_card and advance_round_stage, which remain the
+// authority; this only decides what to offer on screen. Round 1 only so far.
+export type StageCardRules = { min: number; max: number };
+
+export function stageCardRules(stage: CardStage, pathwayId: string, round: number): StageCardRules {
+  if (round !== 1) {
+    return { min: 0, max: 0 };
+  }
+  if (stage === "income-or-retirement") {
+    // Side Hustler draws exactly two Income cards; Entrepreneur may add one
+    // optional Business Income card to the one required card.
+    if (pathwayId === "PATH-006") {
+      return { min: 2, max: 2 };
+    }
+    return pathwayId === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
+  }
+  return stage === "life-event" || stage === "wildcard" || stage === "deduction"
+    ? { min: 1, max: 1 }
+    : { min: 0, max: 0 };
+}
+
+// Pathway-specific student instructions; other stages use stageInstructions.
+export function stageInstructionsFor(stage: CardStage, pathwayId: string, round: number): string {
+  if (round === 1 && stage === "income-or-retirement") {
+    if (pathwayId === "PATH-006") {
+      return "Side Hustler: shuffle the Income deck and draw two cards, one at a time. Select each card that matches one in your hand and save it. Both cards count toward your income.";
+    }
+    if (pathwayId === "PATH-002") {
+      return "Shuffle the Income deck, draw one card, and select the card that matches the one in your hand. As an Entrepreneur you may then draw one additional Income card, but you keep it only if it is Business Income.";
+    }
+  }
+  if (round === 1 && stage === "life-event") {
+    const base = stageInstructions[stage];
+    return pathwayId === "PATH-003"
+      ? `${base} Keep your permanent dependent token: Life Events can never reduce your dependents below one. If the card does not apply to you, return it to the bottom of the deck and draw again.`
+      : `${base} If the card does not apply to you, return it to the bottom of the deck and draw again.`;
+  }
+  return stageInstructions[stage];
 }
 
 export type CardSection = { heading: string | null; subcategory: string | null; note?: string };

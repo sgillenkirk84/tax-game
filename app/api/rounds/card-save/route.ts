@@ -25,10 +25,13 @@ const rpcErrors: Array<[string, number, string]> = [
   ["GAME_LIFE_NOT_ACTIVE", 409, "Card entry is not open for your game."],
   ["NOT_CURRENT_STAGE", 409, "That is not the current stage of your round."],
   ["STAGE_NOT_SUPPORTED", 409, "Saving cards is not available for this stage yet."],
-  ["STAGE_CARD_LIMIT_REACHED", 409, "A card has already been saved for this stage."],
+  ["STAGE_CARD_LIMIT_REACHED", 409, "You have already saved all the cards for this stage."],
+  ["ADDITIONAL_INCOME_NOT_BUSINESS", 409, "An additional Income card is kept only if it is Business Income. Return it to the bottom of the deck and continue."],
   ["INVALID_CHOICE", 400, "Choose one of the options before saving this card."],
   ["CARD_NOT_FOUND", 422, "That card ID was not found. Check the ID printed on your card."],
   ["CARD_WRONG_DECK", 422, "That card is from a different deck. Draw from the deck for this stage."],
+  ["LIFE_EVENT_INELIGIBLE", 409, "This Life Event does not apply to you right now. Return the card to the bottom of the deck and draw another."],
+  ["DEDUCTION_INELIGIBLE", 409, "This Deduction card does not apply to you right now. Return the card to the bottom of the deck and draw another."],
   ["IDEMPOTENCY_KEY_REUSED", 409, "This save request was already used for a different card. Try again."],
 ];
 

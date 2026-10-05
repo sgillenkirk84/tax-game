@@ -1,5 +1,5 @@
 import type { CardPreview } from "@/lib/card-entry";
-import { expectedCategoryFor, isCardStage, recordedChoiceFrom, stageCardLimit } from "@/lib/card-entry";
+import { expectedCategoryFor, isCardStage, recordedChoiceFrom, stageCardRules } from "@/lib/card-entry";
 import { listDeckCards, lookupCard } from "@/lib/card-lookup";
 import { loadRoundState } from "@/lib/round-state";
 import { readStudentCredentials } from "@/lib/student-credentials";
@@ -80,11 +80,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Could not load your saved card." }, { status: 503 });
   }
 
-  const limit = stageCardLimit(body.stage, state.life_current_round);
+  const rules = stageCardRules(body.stage, state.pathway_id, state.life_current_round);
   return Response.json({
     category,
     cards: listDeckCards(category),
     savedCards,
-    limitReached: limit > 0 && savedCount >= limit,
+    minCards: rules.min,
+    maxCards: rules.max,
+    limitReached: rules.max > 0 && savedCount >= rules.max,
   });
 }

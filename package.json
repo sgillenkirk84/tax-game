@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:game-data": "node --experimental-strip-types --test lib/game-data/validate.test.mjs lib/game-calculations/calculations.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

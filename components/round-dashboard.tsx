@@ -2,7 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
-import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage } from "@/lib/card-entry";
+import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage, stageInstructionsFor } from "@/lib/card-entry";
 import { STANDARD_DEDUCTION_NOTE, showsStandardDeduction } from "@/lib/standard-deduction";
 import { advanceTarget, flowIndex, ROUND_FLOW } from "@/lib/round-stages";
 
@@ -157,6 +157,8 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                     stage={step.id}
                     player={player}
                     expectedCategory={expectedCategoryFor(step.id, pathwayId, round)}
+                    instructions={stageInstructionsFor(step.id, pathwayId, round)}
+                    pathwayId={pathwayId}
                     onSavedChange={setCurrentSaved}
                     hideStandardDeductionNote={completedNeedsNote}
                   />

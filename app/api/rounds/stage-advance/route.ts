@@ -17,7 +17,7 @@ const rpcErrors: Array<[string, number, string]> = [
   ["GAME_LIFE_NOT_ACTIVE", 409, "Your game is not open for this step."],
   ["NOT_CURRENT_STAGE", 409, "You have already moved on from this stage. Refresh to see where you are."],
   ["STAGE_NOT_SUPPORTED", 409, "Moving on from this stage is not available yet."],
-  ["STAGE_CARDS_INCOMPLETE", 409, "Save your card before you continue."],
+  ["STAGE_CARDS_INCOMPLETE", 409, "Save all of your cards for this stage before you continue."],
   ["IDEMPOTENCY_KEY_REUSED", 409, "This request was already used for something else. Try again."],
 ];
 

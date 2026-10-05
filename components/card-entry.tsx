@@ -10,6 +10,7 @@ import {
   choiceConfigFor,
   choiceLabel,
   sectionsFor,
+  stageCardRules,
   stageInstructions,
 } from "@/lib/card-entry";
 
@@ -20,11 +21,12 @@ type CardEntryProps = {
   stage: CardStage;
   expectedCategory: CardCategory;
   player: { id: string; resumeToken: string };
+  pathwayId?: string;
   instructions?: string;
   onVerified?: (card: CardPreview) => void;
   onSaved?: (card: CardPreview) => void;
-  // Reports whether the stage's card has been saved (now or earlier), so a
-  // parent can offer a separate Continue action.
+  // Reports whether the stage has enough saved cards to continue (now or
+  // earlier), so a parent can offer a separate Continue action.
   onSavedChange?: (saved: boolean) => void;
 };
 
@@ -41,6 +43,7 @@ export default function CardEntry({
   stage,
   expectedCategory,
   player,
+  pathwayId = "",
   instructions,
   onVerified,
   onSaved,
@@ -55,11 +58,14 @@ export default function CardEntry({
   const [saving, setSaving] = useState(false);
   const [savedCards, setSavedCards] = useState<CardPreview[]>([]);
   const [limitReached, setLimitReached] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
-  const saved = limitReached || justSaved;
+  const rules = stageCardRules(stage, pathwayId, round);
+  // saved: no more cards can be added. canContinue: the required cards are in.
+  const saved = limitReached || (rules.max > 0 && savedCards.length >= rules.max);
+  const canContinue = saved || (rules.min > 0 && savedCards.length >= rules.min);
+  const remaining = rules.max - savedCards.length;
   useEffect(() => {
-    onSavedChange?.(saved);
-  }, [saved, onSavedChange]);
+    onSavedChange?.(canContinue);
+  }, [canContinue, onSavedChange]);
   // One key per selected card, reused on retries so a repeated save is safe.
   const idempotencyKey = useRef<string | null>(null);
 
@@ -141,7 +147,9 @@ export default function CardEntry({
         throw new Error(result.error ?? "Could not save your card.");
       }
       setSavedCards((current) => [...current, { ...card, recordedChoice: choice }]);
-      setJustSaved(true);
+      setCard(null);
+      setChoice(null);
+      idempotencyKey.current = null;
       onSaved?.(card);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save your card.");
@@ -150,11 +158,13 @@ export default function CardEntry({
     }
   }
 
-  const shown = saved ? (savedCards.length > 0 ? savedCards[savedCards.length - 1] : card) : card;
+  const singleSaved = saved && savedCards.length <= 1;
+  const shown = saved ? (singleSaved ? (savedCards[0] ?? card) : null) : card;
   const sections: CardSection[] = sectionsFor(expectedCategory);
   const needsStandardDeductionNote =
     !hideStandardDeductionNote &&
     (showsStandardDeduction(shown?.description, shown?.educationMessage, shown?.subcategory) ||
+      savedCards.some((item) => showsStandardDeduction(item.description, item.educationMessage, item.subcategory)) ||
       (!saved && (cards ?? []).some((option) => showsStandardDeduction(option.description, option.subcategory))));
 
   return (
@@ -167,6 +177,28 @@ export default function CardEntry({
           {instructions ?? stageInstructions[stage]}
         </p>
       )}
+      {!singleSaved && savedCards.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          <p role="status" className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+            {saved
+              ? `All ${savedCards.length} cards saved.`
+              : rules.min > savedCards.length
+                ? `${savedCards.length} of ${rules.min} cards saved. Draw and save ${rules.min - savedCards.length} more.`
+                : `${savedCards.length} card saved. You may draw ${remaining} more if your pathway allows it.`}
+          </p>
+          {savedCards.map((savedCard, position) => (
+            <div key={`${savedCard.id}-${position}`} className="rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-4">
+              <h2 className="text-xl font-black">{savedCard.name}</h2>
+              <p className="mt-2 text-lg leading-relaxed">{savedCard.description}</p>
+              {savedCard.amount !== null ? <p className="mt-2 text-xl font-black">{money(savedCard.amount)}</p> : null}
+              {savedCard.taxCategory ? (
+                <p className="mt-1 text-xs text-[var(--brand-navy)]/70">Tax category: {savedCard.taxCategory}</p>
+              ) : null}
+              <p className="mt-2 font-mono text-[11px] text-[var(--brand-navy)]/50">{savedCard.id}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {error ? (
         <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">

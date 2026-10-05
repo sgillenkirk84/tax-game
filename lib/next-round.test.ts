@@ -165,6 +165,37 @@ test("Round 3 rollout defaults on, respects explicit limits and keeps Round 4 cl
   assert.deepEqual(authorizeNextRound(finalizedState(3), 4, 3), { ok: false, code: "STAGE_NOT_SUPPORTED" });
 });
 
+test("visible Round 3 is rejected when the deployment still uses a lower server limit", () => {
+  const publicLimit = parseMaxEnabledRound("3");
+  const deployedServerLimit = parseMaxEnabledRound("2");
+  assert.equal(3 <= publicLimit, true);
+  assert.deepEqual(authorizeNextRound(finalizedState(2), 3, deployedServerLimit), {
+    ok: false, code: "ROUND_NOT_ENABLED",
+  });
+  const route = readFileSync(new URL("../app/api/rounds/next-round/route.ts", import.meta.url), "utf8");
+  assert.match(route, /\["ROUND_NOT_ENABLED", 409, "This round is not available yet\."\]/);
+  assert.ok(route.indexOf("if (body.round > maxEnabledRound)") < route.indexOf('student.rpc("get_current_round_state"'));
+});
+
+test("aligned deployed limits allow finalized Round 2 to start or recover Round 3 at Income", () => {
+  const limit = parseMaxEnabledRound("3");
+  assert.equal(3 <= limit, true);
+  assert.deepEqual(authorizeNextRound(finalizedState(2), 3, limit), { ok: true, roundNumber: 3 });
+  assert.deepEqual(planStartNextRound({
+    currentRound: 2, targetRound: 3, previousFinalized: true,
+    previousEndingCash: 14250, previousEndingDebt: 12000,
+  }), { action: "start", beginningCash: 14250, beginningDebt: 12000 });
+  assert.deepEqual(authorizeNextRound({
+    ...finalizedState(3), round_status: "in_progress", round_current_stage: "income-or-retirement",
+  }, 3, limit), { ok: true, roundNumber: 3 });
+  assert.deepEqual(planStartNextRound({
+    currentRound: 3, targetRound: 3, previousFinalized: true,
+    previousEndingCash: 14250, previousEndingDebt: 12000,
+  }), { action: "replay" });
+  assert.match(migration, /set current_round = p_round_number,\s*current_stage = 'income-or-retirement'/);
+  assert.doesNotMatch(migration, /ROUND_NOT_ENABLED|MAX_ENABLED_ROUND/);
+});
+
 test("Round 3 handoff preserves balances and life state without rewriting finalized history", () => {
   const previous = { currentRound: 2, targetRound: 3, previousFinalized: true, previousEndingCash: 14250.75, previousEndingDebt: 12000 };
   const before = structuredClone(previous);

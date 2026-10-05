@@ -499,11 +499,10 @@ test("taxes recurring investment income but not investment asset balances", () =
   assert.equal(combinedIncome.adjustedGrossIncome, 32000);
 });
 
-test("requires each approved Head of Household condition and uses HOH table values", () => {
+test("requires the approved educational household conditions and uses HOH table values", () => {
   const eligibilityCases = [
-    { unmarried: false, qualifyingDependent: true, paidMoreThanHalfHomeCosts: true },
-    { unmarried: true, qualifyingDependent: false, paidMoreThanHalfHomeCosts: true },
-    { unmarried: true, qualifyingDependent: true, paidMoreThanHalfHomeCosts: false },
+    { unmarried: false, qualifyingDependent: true },
+    { unmarried: true, qualifyingDependent: false },
   ];
   for (const headOfHousehold of eligibilityCases) {
     const result = calculateGameTax({
@@ -521,7 +520,6 @@ test("requires each approved Head of Household condition and uses HOH table valu
     headOfHousehold: {
       unmarried: true,
       qualifyingDependent: true,
-      paidMoreThanHalfHomeCosts: true,
     },
     otherEligibleItemizedDeduction: 0,
   });

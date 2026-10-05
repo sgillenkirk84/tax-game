@@ -91,7 +91,6 @@ export type GameTaxInput = {
   headOfHousehold?: {
     unmarried: boolean;
     qualifyingDependent: boolean;
-    paidMoreThanHalfHomeCosts: boolean;
   };
   otherEligibleItemizedDeduction: number;
   medicalExpenses?: number;
@@ -641,16 +640,13 @@ export function calculateGameTax(
   if (input.filingStatus === "HOH") {
     const eligibility = input.headOfHousehold;
     if (!eligibility) {
-      reasons.push("Head of Household requires an unmarried player, a qualifying dependent, and payment of more than half the home-maintenance costs.");
+      reasons.push("Head of Household requires an unmarried player and an active qualifying household dependent in this game.");
     } else {
       if (!eligibility.unmarried) {
         reasons.push("Head of Household requires an unmarried player.");
       }
       if (!eligibility.qualifyingDependent) {
         reasons.push("Head of Household requires a qualifying dependent.");
-      }
-      if (!eligibility.paidMoreThanHalfHomeCosts) {
-        reasons.push("Head of Household requires payment of more than half the home-maintenance costs.");
       }
     }
   }

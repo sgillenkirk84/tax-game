@@ -1,14 +1,16 @@
-import { GAME_DATA } from "@/lib/game-data";
-import { itemizedDeductionForCard } from "@/lib/game-calculations/deduction-rules";
-import { dependentActiveInRound, resolveClimberPrimary } from "@/lib/round-rules";
-import type { GameCard } from "@/lib/game-data/types";
+import workbookData from "./game-data/workbook-data.json" with { type: "json" };
+import { itemizedDeductionForCard } from "./game-calculations/deduction-rules.ts";
+import { dependentActiveInRound, resolveClimberPrimary } from "./round-rules.ts";
+import type { GameCard, GameDataset } from "./game-data/types";
 import {
   calculateGameTax,
   selectWorkbookDeduction,
   type ActiveDependent,
   type FilingStatusCode,
   type IncomeSource,
-} from "@/lib/game-calculations";
+} from "./game-calculations/calculations.ts";
+
+const GAME_DATA: GameDataset = workbookData;
 
 // Authoritative round inputs as returned by the get_round_tax_inputs RPC.
 // Nothing here comes from the browser.
@@ -119,8 +121,8 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   if (round.current_stage !== "deduction" || life.current_stage !== "deduction") {
     return fail("NOT_DEDUCTION_STAGE", "Tax is calculated after the Deduction stage.");
   }
-  if (life.filing_status !== "SINGLE" && life.filing_status !== "MFJ") {
-    return fail("FILING_STATUS_NOT_SUPPORTED", "Head of Household has no approved source.");
+  if (life.filing_status !== "SINGLE" && life.filing_status !== "MFJ" && life.filing_status !== "HOH") {
+    return fail("FILING_STATUS_NOT_SUPPORTED", "This filing status has no approved household rule.");
   }
 
   // Income cards per pathway: Side Hustler exactly two; Entrepreneur one plus an optional
@@ -217,7 +219,7 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   }
 
   // Life Event: eligibility is re-verified, and the effect applies in the round drawn.
-  let filingStatus = life.filing_status as FilingStatusCode;
+  let married = life.filing_status === "MFJ";
   let homeowner = life.homeowner;
   const dependents: ActiveDependent[] = snapshot.effects
     .filter(
@@ -246,15 +248,12 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
       break;
     case "LIFE-003":
     case "LIFE-007":
-      if (filingStatus === "MFJ") return fail("LIFE_EVENT_INELIGIBLE", `${lifeCard.id} requires an unmarried player.`, lifeCard.id);
-      filingStatus = "MFJ";
-      stateChanges.filing_status = "MFJ";
+      if (married) return fail("LIFE_EVENT_INELIGIBLE", `${lifeCard.id} requires an unmarried player.`, lifeCard.id);
+      married = true;
       break;
     case "LIFE-004":
-      if (filingStatus !== "MFJ") return fail("LIFE_EVENT_INELIGIBLE", "LIFE-004 requires a married player.", lifeCard.id);
-      // The approved dataset simplifies post-divorce filing to Single; Head of Household is never assumed.
-      filingStatus = "SINGLE";
-      stateChanges.filing_status = "SINGLE";
+      if (!married) return fail("LIFE_EVENT_INELIGIBLE", "LIFE-004 requires a married player.", lifeCard.id);
+      married = false;
       break;
     case "LIFE-005":
       if (homeowner) return fail("LIFE_EVENT_INELIGIBLE", "LIFE-005 requires a non-homeowner.", lifeCard.id);
@@ -284,6 +283,17 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
       : effectDependents;
   if (newDependents.length > 0) {
     stateChanges.dependents_added = newDependents;
+  }
+
+  // Active game dependents establish household eligibility independently of credit eligibility.
+  const filingStatus: FilingStatusCode = married ? "MFJ" : activeDependents.length > 0 ? "HOH" : "SINGLE";
+  stateChanges.filing_status = filingStatus;
+  const primary = sources[0];
+  const spouseIncome: IncomeSource | null = married
+    ? { ...primary, sourceId: `spouse:${primary.sourceId}` }
+    : null;
+  if (spouseIncome) {
+    sources.push({ ...spouseIncome });
   }
 
   // Wildcard.
@@ -384,6 +394,9 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   const result = calculateGameTax({
     incomeSources: sources,
     filingStatus,
+    headOfHousehold: filingStatus === "HOH"
+      ? { unmarried: !married, qualifyingDependent: activeDependents.length > 0 }
+      : undefined,
     otherEligibleItemizedDeduction: otherItemized,
     medicalExpenses,
     dependents: activeDependents,
@@ -454,6 +467,7 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
         .map((card) => ({ stage: card.stage, card_id: card.card_id, history_id: card.history_id })),
       filing_status_before: life.filing_status,
       filing_status_applied: filingStatus,
+      spouse_income: spouseIncome,
       homeowner_before: life.homeowner,
       homeowner_after: homeowner,
       income_sources: sources,

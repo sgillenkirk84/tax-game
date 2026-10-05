@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  if (!serverRoundEnabled(body.round) || body.round > 2) {
+  if (!serverRoundEnabled(body.round) || body.round > 3) {
     return Response.json({ error: "Tax Prepayment is not available for this round yet." }, { status: 409 });
   }
 

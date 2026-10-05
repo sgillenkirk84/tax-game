@@ -213,7 +213,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                         {advanceError}
                       </p>
                     ) : null}
-                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round <= 2)) ? (
+                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round <= 3)) ? (
                       <button
                         type="button"
                         onClick={() => void advance()}
@@ -223,9 +223,9 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
                     ) : step.id === "deduction" ? (
-                      taxCalculated && round > 2 ? (
+                      taxCalculated && (!prepaymentEnabled || !advanceEnabled) ? (
                         <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
-                          Your Round {round} tax return is saved. Tax Prepayment and Results for this round are coming soon.
+                          Your Round {round} tax return is saved. Tax Prepayment is not available yet.
                         </p>
                       ) : null
                     ) : (
@@ -238,6 +238,11 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                 {step.id === "tax-prepayment" && round === 2 && prepaymentFixed && (!resultsEnabled || !advanceEnabled) ? (
                   <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                     Your Round 2 Tax Prepayment is saved. Results and Life Ledger are coming next.
+                  </p>
+                ) : null}
+                {step.id === "tax-prepayment" && round === 3 && prepaymentFixed ? (
+                  <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+                    Your Round 3 Tax Prepayment is saved. Results and Life Ledger for this round are coming soon.
                   </p>
                 ) : null}
               </li>

@@ -4,7 +4,7 @@ import test from "node:test";
 import dataset from "./game-data/workbook-data.json" with { type: "json" };
 import { isValidCardChoice, stageCardRules } from "./card-entry.ts";
 import { advanceTarget } from "./round-stages.ts";
-import { computeRoundResults } from "./round-results.ts";
+import { computeRoundResults, resultsAvailableForRound } from "./round-results.ts";
 import {
   calculatePrepaymentDollars,
   canRedraw,
@@ -175,12 +175,14 @@ test("only a Corporate Climber with a first card below 90% may redraw", () => {
   }
 });
 
-test("Tax Prepayment is one card in Rounds 1-2 and a redraw choice is accepted only for PRE cards", () => {
+test("Tax Prepayment is one card in Rounds 1-3 and a redraw choice is accepted only for PRE cards", () => {
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-003", 1), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 1), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-003", 2), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 2), { min: 1, max: 1 });
-  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 0, max: 0 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 1, max: 1 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-003", 3), { min: 1, max: 1 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 4), { min: 0, max: 0 });
   assert.equal(isValidCardChoice("PRE-001", "redraw"), true);
   assert.equal(isValidCardChoice("PRE-001", null), true);
   assert.equal(isValidCardChoice("PRE-001", "keep"), false);
@@ -196,7 +198,130 @@ test("Deduction advances to Tax Prepayment, then Results (Audit is skipped), and
   assert.equal(advanceTarget("results-and-life-ledger", 1), null);
   assert.deepEqual(advanceTarget("tax-prepayment", 2), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.deepEqual(advanceTarget("deduction", 2), { stage: "tax-prepayment", label: "Tax Prepayment" });
-  assert.equal(advanceTarget("deduction", 3), null);
+  assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
+  assert.equal(advanceTarget("tax-prepayment", 3), null);
+});
+
+test("Round 3 shares all pre-credit card rates and restores fixed payments without mutating history", () => {
+  const expected: Record<string, number> = {
+    "PRE-001": 140, "PRE-002": 210, "PRE-003": 280, "PRE-004": 315,
+    "PRE-005": 350, "PRE-006": 368, "PRE-007": 403, "PRE-008": 455,
+    "PRE-009": 350, "PRE-010": 0,
+  };
+  for (const card of cards) {
+    const id = String(card.id);
+    const rate = PREPAYMENT_RATES_PCT[id];
+    const fixed = calculatePrepaymentDollars(350, rate);
+    assert.equal(fixed, expected[id]);
+    const stored = {
+      round_number: 3, pathway_id: "PATH-003", calculated_tax: 0,
+      tax_before_credits: 350, credits_applied: 350,
+      cards: [{ card_id: id, rate_pct: rate }],
+      prepayment: {
+        card_id: id, rate_pct: rate, prepaid_amount: fixed, calculated_tax: 0,
+        calculation_base: "income-tax-before-credits", tax_before_credits: 350,
+        card_history_id: "saved-history", redraw_used: false, first_card_id: null,
+      },
+    };
+    const before = structuredClone(stored);
+    const restored = summarizePrepayment(JSON.parse(JSON.stringify(stored)));
+    assert.equal(restored?.fixed?.cardId, id);
+    assert.equal(restored?.fixed?.ratePct, rate);
+    assert.equal(restored?.fixed?.baseAmount, 350);
+    assert.equal(restored?.fixed?.prepaidAmount, expected[id]);
+    assert.equal(restored?.calculatedTax, 0);
+    assert.equal(restored?.creditsApplied, 350);
+    assert.equal(restored?.status, "fixed");
+    assert.deepEqual(settlementPreview(0, fixed), { kind: fixed > 0 ? "refund" : "settled", amount: fixed });
+    assert.deepEqual(summarizePrepayment(stored), restored);
+    assert.deepEqual(stored, before);
+  }
+  assert.equal(resultsAvailableForRound(3, 3), false);
+  assert.equal(resultsAvailableForRound(4, 3), false);
+});
+
+test("Round 3 gate migration extends exact installed definitions without touching shared formulas or Results", () => {
+  const read = (name: string) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const extract = (source: string, name: string) => {
+    const start = source.indexOf(`create or replace function public.${name}(`);
+    const end = source.indexOf("\n$$;", start);
+    assert.ok(start >= 0 && end > start, name);
+    return source.slice(start, end);
+  };
+  const next = read("20261004100000_next_round.sql");
+  const prepayment = read("20261004080000_tax_prepayment.sql");
+  const definitions = new Map([
+    ["public.record_round_card(uuid,text,integer,text,text,text,uuid,text)", extract(next, "record_round_card")],
+    ["public.advance_round_stage(uuid,text,integer,text,uuid)", extract(next, "advance_round_stage")],
+    ["public.keep_round_prepayment_card(uuid,text,integer,uuid)", extract(prepayment, "keep_round_prepayment_card")],
+    ["public.finalize_round_results(uuid,text,integer,uuid,jsonb)", extract(read("20261004090000_round_results.sql"), "finalize_round_results")],
+  ]);
+  const patch = (sql: string, count: number) => {
+    const changes = [...sql.matchAll(/\(\s*'([^']+)',\s*(?:\$old\$([\s\S]*?)\$old\$|'([^']*)'),\s*(?:\$new\$([\s\S]*?)\$new\$|'([^']*)')\s*\)/g)];
+    assert.equal(changes.length, count);
+    for (const [, signature, oldBlock, oldString, newBlock, newString] of changes) {
+      const source = definitions.get(signature);
+      assert.ok(source, signature);
+      const oldText = oldBlock ?? oldString;
+      assert.equal(source.split(oldText).length - 1, 1, signature);
+      definitions.set(signature, source.replace(oldText, newBlock ?? newString));
+    }
+  };
+  patch(read("20261005120000_round_two_tax_prepayment.sql"), 3);
+  patch(read("20261005150000_round_two_results.sql"), 6);
+  const previous = new Map(definitions);
+  const sql = read("20261005160000_round_three_tax_prepayment.sql");
+  patch(sql, 3);
+  const record = definitions.get("public.record_round_card(uuid,text,integer,text,text,text,uuid,text)")!;
+  const advance = definitions.get("public.advance_round_stage(uuid,text,integer,text,uuid)")!;
+  const keep = definitions.get("public.keep_round_prepayment_card(uuid,text,integer,uuid)")!;
+  assert.equal(record, previous.get("public.record_round_card(uuid,text,integer,text,text,text,uuid,text)")!.replace("when life_row.current_round not between 1 and 2 then 0", "when life_row.current_round not between 1 and 3 then 0"));
+  assert.match(advance, /when 'deduction' then\s+if life_row.current_round between 1 and 3 then/);
+  assert.match(advance, /p_from_stage = 'deduction'[\s\S]*TAX_CALCULATION_REQUIRED/);
+  assert.match(advance, /when 'tax-prepayment' then\s+if life_row.current_round between 1 and 2 then/);
+  for (const source of [record, advance, keep]) {
+    assert.match(source, /PLAYER_SETUP_NOT_AVAILABLE/);
+    assert.match(source, /NOT_CURRENT_STAGE/);
+    assert.match(source, /for update/);
+    assert.match(source, /IDEMPOTENCY_KEY_REUSED/);
+  }
+  assert.ok(record.indexOf("if found then") < record.indexOf("insert into public.mm_game_card_history"));
+  assert.match(record, /TAX_CALCULATION_REQUIRED/);
+  assert.match(record, /PREPAYMENT_ALREADY_FIXED/);
+  assert.match(record, /catalog_row\.prepayment_rate_pct/);
+  assert.match(record, /first_rate >= 90/);
+  assert.match(record, /perform public\.mm_fix_round_prepayment/);
+  assert.match(keep, /if life_row.current_round not between 1 and 3 then/);
+  assert.match(keep, /public\.mm_fix_round_prepayment/);
+  const helper = read("20261005140000_fix_precredit_prepayment_save.sql");
+  assert.match(helper, /round\(v_tax_before_credits \* p_rate_pct \/ 100, 0\)/);
+  assert.doesNotMatch(helper, /current_round|round_number/);
+  assert.equal(definitions.get("public.finalize_round_results(uuid,text,integer,uuid,jsonb)"), previous.get("public.finalize_round_results(uuid,text,integer,uuid,jsonb)"));
+  assert.match(sql, /old_count <> 1/);
+  assert.match(sql, /fn.prosecdef/);
+  assert.match(sql, /search_path=pg_catalog/);
+  assert.doesNotMatch(sql, /alter table|update public\.mm_game|insert into public\.mm_game|mm_fix_round_prepayment|finalize_round_results|rate_pct/);
+});
+
+test("Round 3 UI requires saved tax, uses physical selection, and stops after fixed Prepayment", () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const dashboard = read("../components/round-dashboard.tsx");
+  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 3/);
+  assert.match(dashboard, /prepaymentFixed && resultsEnabled && advanceEnabled && target/);
+  assert.match(dashboard, /round === 3 && prepaymentFixed/);
+  const ui = read("../components/tax-prepayment.tsx");
+  assert.match(ui, /<CardEntry[\s\S]*stage="tax-prepayment"/);
+  assert.match(ui, /physically draw/);
+  assert.doesNotMatch(ui, /Math\.random|calculatePrepaymentDollars|round === 3/);
+  const entry = read("../components/card-entry.tsx");
+  assert.match(entry, /idempotencyKey/);
+  assert.doesNotMatch(entry, /Math\.random/);
+  for (const route of ["prepayment", "prepayment-keep"]) {
+    assert.match(read(`../app/api/rounds/${route}/route.ts`), /serverRoundEnabled\(body.round\).*body.round > 3/);
+  }
+  for (const route of ["results", "results-finalize"]) {
+    assert.match(read(`../app/api/rounds/${route}/route.ts`), /resultsAvailableForRound\(body.round, serverMaxEnabledRound\(\)\)/);
+  }
 });
 
 test("migration requires a saved tax calculation and never rewrites saved tax", () => {

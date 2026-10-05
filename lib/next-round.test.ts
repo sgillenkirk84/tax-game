@@ -122,7 +122,7 @@ test("Corporate Climber keeps the retained card unless the new one pays more", (
   });
 });
 
-test("Rounds 1 to 3 offer the same card stages; Prepayment opens in Rounds 1-2", () => {
+test("Rounds 1 to 3 offer the same card stages including Tax Prepayment", () => {
   for (const round of [1, 2, 3]) {
     assert.deepEqual(stageCardRules("income-or-retirement", "PATH-004", round), { min: 1, max: 1 });
     assert.deepEqual(stageCardRules("income-or-retirement", "PATH-006", round), { min: 2, max: 2 });
@@ -132,17 +132,17 @@ test("Rounds 1 to 3 offer the same card stages; Prepayment opens in Rounds 1-2",
     assert.deepEqual(stageCardRules("deduction", "PATH-004", round), { min: 1, max: 1 });
   }
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 2), { min: 1, max: 1 });
-  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 3), { min: 0, max: 0 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-004", 3), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("income-or-retirement", "PATH-004", 4), { min: 0, max: 0 });
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 3), /two cards/);
 });
 
-test("Round 2 opens Tax Prepayment and Results; Round 3 stops after Tax Calculation", () => {
+test("Round 2 opens Tax Prepayment and Results; Round 3 stops after Tax Prepayment", () => {
   for (const round of [2, 3]) {
     assert.equal(advanceTarget("income-or-retirement", round)?.stage, "life-event");
     assert.equal(advanceTarget("life-event", round)?.stage, "wildcard");
     assert.equal(advanceTarget("wildcard", round)?.stage, "deduction");
-    assert.equal(advanceTarget("deduction", round)?.stage ?? null, round === 2 ? "tax-prepayment" : null);
+    assert.equal(advanceTarget("deduction", round)?.stage, "tax-prepayment");
     assert.equal(advanceTarget("tax-prepayment", round)?.stage ?? null, round === 2 ? "results-and-life-ledger" : null);
   }
   assert.equal(advanceTarget("deduction", 1)?.stage, "tax-prepayment");
@@ -229,20 +229,21 @@ test("Round 3 physical Income and supported stages reuse existing card rules", (
   assert.doesNotMatch(entry, /Math\.random/);
 });
 
-test("Round 3 cannot advance beyond Deduction or expose Prepayment and Results", () => {
-  assert.equal(advanceTarget("deduction", 3), null);
+test("Round 3 can advance to Tax Prepayment but cannot expose Results or Round 4", () => {
+  assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.equal(advanceTarget("tax-prepayment", 3), null);
-  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 0, max: 0 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 1, max: 1 });
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 4), { min: 0, max: 0 });
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-  const prepaymentMigration = read("../supabase/migrations/20261005120000_round_two_tax_prepayment.sql");
-  assert.match(prepaymentMigration, /when life_row\.current_round not between 1 and 2 then 0/);
-  assert.match(prepaymentMigration, /when 'deduction' then\n      if life_row\.current_round between 1 and 2 then/);
+  const prepaymentMigration = read("../supabase/migrations/20261005160000_round_three_tax_prepayment.sql");
+  assert.match(prepaymentMigration, /when life_row\.current_round not between 1 and 3 then 0/);
+  assert.match(prepaymentMigration, /when 'deduction' then\n      if life_row\.current_round between 1 and 3 then/);
   const resultsMigration = read("../supabase/migrations/20261005150000_round_two_results.sql");
   assert.match(resultsMigration, /if life_row\.current_round not between 1 and 2 then/);
-  assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 2/);
+  assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 3/);
   assert.match(read("./round-results.ts"), /round <= 2 && round <= maxEnabledRound/);
   const dashboard = read("../components/round-dashboard.tsx");
-  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 2/);
+  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 3/);
 });
 
 test("Tax Prepayment, Results and Audit are untouched by this migration", () => {

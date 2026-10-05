@@ -149,3 +149,24 @@ The existing shared tax calculation remains available after Deduction. The
 round stays at Deduction: Round 3 Tax Prepayment and Results remain closed in
 the existing application/database gates. Round 4 remains unavailable. No new
 formulas, database changes or migration are required.
+
+## Round 3 Tax Prepayment (TASK 10.15.21)
+
+Enabled Round 3 can continue from a saved Tax Calculation to the existing physical
+Tax Prepayment card flow. All applicable rounds share the same pre-credit basis,
+whole-dollar halves-up rounding, card rates and fixed-payment persistence.
+Credits independently reduce Calculated Tax; $350 before credits, $350 credits
+and PRE-006 at 105% produce $368 prepaid. Refresh restores the saved payment,
+and existing idempotency protects retries. Corporate Climber keep/redraw remains
+unchanged. Round 3 stops after fixed Tax Prepayment; Results/Life Ledger remain
+closed, and Round 4 is not enabled.
+
+Review and manually install `20261005160000_round_three_tax_prepayment.sql`
+before live testing. It extends only three existing database availability gates;
+it does not replace the shared pre-credit helper or rewrite finalized history.
+No SQL is executed by the application.
+
+Manual Production rollout history: `MAX_ENABLED_ROUND` was found still set to 2.
+The user changed it to 3, verified other relevant Vercel settings and manually
+redeployed Production. Round 3 then opened for the existing player, who progressed
+successfully to Round 3 Tax Calculation. This task changes no environment values.

@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
+import TaxCalculation from "@/components/tax-calculation";
 import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage, stageInstructionsFor } from "@/lib/card-entry";
 import { STANDARD_DEDUCTION_NOTE, showsStandardDeduction } from "@/lib/standard-deduction";
 import { advanceTarget, flowIndex, ROUND_FLOW } from "@/lib/round-stages";
@@ -32,6 +33,8 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
   const [currentSaved, setCurrentSaved] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [advanceError, setAdvanceError] = useState("");
+  // True once a saved tax calculation exists; Tax Prepayment will unlock from this persisted status.
+  const [taxCalculated, setTaxCalculated] = useState(false);
   // One key per advance attempt, reused on retries so a repeated request is safe.
   const advanceKey = useRef<string | null>(null);
 
@@ -131,7 +134,11 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
               <li key={step.id} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-green-800">Completed · {label}</p>
                 {step.kind === "automatic" ? (
-                  <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Calculated automatically.</p>
+                  round === 1 ? (
+                    <TaxCalculation round={round} player={player} readOnly />
+                  ) : (
+                    <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Calculated automatically.</p>
+                  )
                 ) : null}
                 {cards.map((card, position) => (
                   <div key={`${card.id}-${position}`} className="mt-2">
@@ -169,6 +176,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                 )}
                 {currentSaved && isCardStage(step.id) ? (
                   <div className="mt-4">
+                    {step.id === "deduction" && round === 1 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
                     {advanceError ? (
                       <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
                         {advanceError}
@@ -183,7 +191,7 @@ export default function RoundDashboard({ round, pathwayId, player }: RoundDashbo
                       >
                         {advancing ? "Moving on..." : `Continue to ${target.label}`}
                       </button>
-                    ) : (
+                    ) : step.id === "deduction" && taxCalculated ? null : (
                       <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                         {target ? "The next stage is coming soon." : `${label} complete. Your teacher will let you know when the next step opens.`}
                       </p>

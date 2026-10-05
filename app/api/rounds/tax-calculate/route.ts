@@ -1,6 +1,7 @@
 import { readStudentCredentials } from "@/lib/student-credentials";
 import { createServiceSupabaseClient } from "@/lib/service-supabase";
 import { buildRoundTaxCalculation, type RoundTaxSnapshot } from "@/lib/round-tax";
+import { summarizeTaxCalculation } from "@/lib/tax-summary";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,15 +75,15 @@ export async function POST(request: Request) {
 
     // A stored calculation is returned as-is; it is never recomputed or applied twice.
     if (snapshot.round.calculation) {
-      return Response.json({ calculation: snapshot.round.calculation, replayed: true });
+      const stored = summarizeTaxCalculation(snapshot.round.calculation);
+      return stored
+        ? Response.json({ summary: stored, replayed: true })
+        : Response.json({ error: "Could not calculate your tax." }, { status: 500 });
     }
 
     const built = buildRoundTaxCalculation(snapshot);
     if (!built.ok) {
-      return Response.json(
-        { error: built.message, code: built.code, cardId: built.cardId ?? null },
-        { status: 422 }
-      );
+      return Response.json({ error: "Your round is not ready to calculate.", code: built.code }, { status: 422 });
     }
 
     const saved = await supabase.rpc("save_round_tax_result", {
@@ -100,7 +101,11 @@ export async function POST(request: Request) {
     if (!response) {
       return Response.json({ error: "Could not calculate your tax." }, { status: 500 });
     }
-    return Response.json({ calculation: response.calculation, replayed: response.replayed });
+    const summary = summarizeTaxCalculation(response.calculation);
+    if (!summary) {
+      return Response.json({ error: "Could not calculate your tax." }, { status: 500 });
+    }
+    return Response.json({ summary, replayed: response.replayed });
   } catch {
     return Response.json({ error: "Could not reach student progress storage." }, { status: 503 });
   }

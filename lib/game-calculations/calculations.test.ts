@@ -21,6 +21,65 @@ import {
 } from "./calculations.ts";
 import { itemizedDeductionForCard } from "./deduction-rules.ts";
 import type { GameDataset } from "../game-data/types";
+import { calculatePrepaymentDollars, settlementPreview } from "../tax-prepayment.ts";
+
+const prepaymentCases = [
+  { name: "credits reduce tax to zero", before: 1757, credits: 1757, final: 0, rate: 0.8, prepaid: 1406, refund: 1406, due: 0 },
+  { name: "no credits", before: 1000, credits: 0, final: 1000, rate: 0.8, prepaid: 800, refund: 0, due: 200 },
+  { name: "partial credits", before: 2000, credits: 500, final: 1500, rate: 0.8, prepaid: 1600, refund: 100, due: 0 },
+  { name: "zero percent card", before: 2000, credits: 500, final: 1500, rate: 0, prepaid: 0, refund: 0, due: 1500 },
+  { name: "100 percent card", before: 1757, credits: 1757, final: 0, rate: 1, prepaid: 1757, refund: 1757, due: 0 },
+  { name: "overpayment card", before: 2000, credits: 500, final: 1500, rate: 1.15, prepaid: 2300, refund: 800, due: 0 },
+  { name: "zero pre-credit tax", before: 0, credits: 0, final: 0, rate: 1.3, prepaid: 0, refund: 0, due: 0 },
+];
+
+for (const example of prepaymentCases) {
+  test(`pre-credit Tax Prepayment: ${example.name}`, () => {
+    assert.equal(example.before - example.credits, example.final);
+    const payment = calculateTaxPrepayment(example.before, example.rate);
+    assert.equal(payment.taxBeforePrepayment, example.before);
+    assert.equal(payment.prepaidAmount, example.prepaid);
+    assert.equal(calculatePrepaymentDollars(example.before, example.rate * 100), example.prepaid);
+    assert.deepEqual(settleTaxPrepayment(payment.prepaidAmount, example.final), {
+      taxPrepaid: example.prepaid,
+      finalTaxLiability: example.final,
+      refund: example.refund,
+      amountDue: example.due,
+    });
+    assert.deepEqual(settlementPreview(example.final, payment.prepaidAmount), {
+      kind: example.refund > 0 ? "refund" : example.due > 0 ? "due" : "settled",
+      amount: example.refund || example.due,
+    });
+  });
+}
+
+test("real tax-engine credits leave prepayment independent and preserve one final tax cost", () => {
+  for (const dependent of ["qualifying-child", "other-dependent"] as const) {
+    const tax = calculateGameTax({
+      incomeSources: [{ category: "w2-wages", amount: 33000, sourceId: "primary" }],
+      filingStatus: "SINGLE",
+      otherEligibleItemizedDeduction: 0,
+      dependents: [{ sourceCardId: dependent === "qualifying-child" ? "LIFE-001" : "LIFE-002", category: dependent }],
+    });
+    if (tax.status !== "supported") {
+      assert.fail(tax.reasons.join("; "));
+    }
+    const before = structuredClone(tax);
+    const prepaid = calculateTaxPrepayment(tax.taxBeforeCredits, 0.8).prepaidAmount;
+    assert.ok(prepaid > 0);
+    assert.ok(tax.credits.creditsAppliedToTax > 0);
+    assert.equal(tax.finalTax, tax.taxBeforeCredits - tax.credits.creditsAppliedToTax);
+    if (dependent === "qualifying-child") {
+      assert.equal(tax.finalTax, 0);
+      assert.equal(settleTaxPrepayment(prepaid, tax.finalTax).refund, prepaid);
+    } else {
+      assert.ok(tax.finalTax > 0);
+    }
+    const settlement = settleTaxPrepayment(prepaid, tax.finalTax);
+    assert.equal(Math.round((prepaid + settlement.amountDue - settlement.refund) * 100), Math.round(tax.finalTax * 100));
+    assert.deepEqual(tax, before);
+  }
+});
 
 test("calculates progressive single-filer tax at bracket boundaries", () => {
   assert.equal(calculateFederalIncomeTax(0, "SINGLE").tax, 0);
@@ -576,7 +635,7 @@ test("applies AUD-008 omitted income and incremental-tax penalty without changin
   if (preAuditTax.status !== "supported") {
     assert.fail(preAuditTax.reasons.join("; "));
   }
-  const lockedPrepayment = calculateTaxPrepayment(preAuditTax.finalTax, 0.9).prepaidAmount;
+  const lockedPrepayment = calculateTaxPrepayment(preAuditTax.taxBeforeCredits, 0.9).prepaidAmount;
   const audit = calculateAud008Audit({ taxInput, fixedTaxPrepayment: lockedPrepayment });
   if (audit.status !== "supported") {
     assert.fail(audit.reasons.join("; "));

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { computeRoundResults, economicGrossIncome, pendingCashEffects, summarizeStoredResults, toFinalizePayload } from "./round-results.ts";
 import { ACTIVE_ROUND_FLOW, ROUND_FLOW } from "./round-stages.ts";
+import { calculatePrepaymentDollars } from "./tax-prepayment.ts";
 
 const base = {
   beginningCash: 10000,
@@ -43,6 +44,18 @@ test("zero tax: a zero prepayment is exactly settled", () => {
   assert.equal(r.taxRefund, 0);
   assert.equal(r.taxAmountDue, 0);
   assert.equal(r.endingCash, 10000 + 60000 - LIVING_60K);
+});
+
+test("credits reduce final tax to zero but the full positive prepayment is refunded", () => {
+  const r = computeRoundResults({
+    ...base, finalTax: 0, fixedPrepayment: calculatePrepaymentDollars(1757, 80),
+  });
+  assert.equal(r.calculatedTax, 0);
+  assert.equal(r.taxPrepaid, 1406);
+  assert.equal(r.taxRefund, 1406);
+  assert.equal(r.taxAmountDue, 0);
+  assert.equal(r.endingCash, 10000 + 60000 - LIVING_60K);
+  assert.equal(toFinalizePayload(r).tax_refund, 1406);
 });
 
 test("student loan above $4,000 pays $4,000", () => {

@@ -1,5 +1,6 @@
 import workbookData from "../game-data/workbook-data.json" with { type: "json" };
 import type { GameCard, GameDataset, IncomeComponent } from "../game-data/types";
+import { calculatePrepaymentDollars } from "../tax-prepayment.ts";
 
 const GAME_DATA: GameDataset = workbookData;
 
@@ -840,18 +841,17 @@ export function calculateStudentLoanPayment(
 }
 
 export function calculateTaxPrepayment(
-  taxBeforePrepayment: number,
+  taxBeforeCredits: number,
   prepaymentRate: number
 ): { taxBeforePrepayment: number; rate: number; prepaidAmount: number } {
-  const taxCents = nonNegativeMoney(taxBeforePrepayment, "Tax before prepayment");
+  const taxCents = nonNegativeMoney(taxBeforeCredits, "Income tax before credits");
   if (!Number.isFinite(prepaymentRate) || prepaymentRate < 0) {
     throw new RangeError("Tax prepayment rate must be a finite non-negative number.");
   }
-  const prepaidCents = Math.round(taxCents * prepaymentRate);
   return {
     taxBeforePrepayment: fromCents(taxCents),
     rate: prepaymentRate,
-    prepaidAmount: fromCents(prepaidCents),
+    prepaidAmount: calculatePrepaymentDollars(fromCents(taxCents), prepaymentRate * 100),
   };
 }
 

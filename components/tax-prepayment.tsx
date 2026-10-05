@@ -17,7 +17,7 @@ const money = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 // Tax Prepayment: the student selects the physical card they drew. The server
-// fixes the prepaid amount from the saved calculated tax and the card's rate,
+// fixes the prepaid amount from saved income tax before credits and the card's rate,
 // so the browser never supplies an amount. Nothing here changes cash or settles
 // tax; the refund or amount due is a derived preview shown only once final.
 export default function TaxPrepayment({ round, player, pathwayId, onFixedChange }: TaxPrepaymentProps) {
@@ -139,15 +139,36 @@ export default function TaxPrepayment({ round, player, pathwayId, onFixedChange 
           </p>
         ) : null}
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          {state.taxBeforeCredits !== null ? (
+            <div className="rounded-xl bg-white p-4">
+              <dt className="text-sm font-bold">Income tax before credits</dt>
+              <dd className="mt-1 text-2xl font-black">{money(state.taxBeforeCredits)}</dd>
+            </div>
+          ) : null}
+          {state.creditsApplied !== null ? (
+            <div className="rounded-xl bg-white p-4">
+              <dt className="text-sm font-bold">Tax credits applied</dt>
+              <dd className="mt-1 text-2xl font-black">{money(state.creditsApplied)}</dd>
+            </div>
+          ) : null}
           <div className="rounded-xl bg-white p-4">
-            <dt className="text-sm font-bold">Your calculated tax</dt>
+            <dt className="text-sm font-bold">Your calculated tax after credits</dt>
             <dd className="mt-1 text-2xl font-black">{state.calculatedTax === null ? "—" : money(state.calculatedTax)}</dd>
           </div>
           <div className="rounded-xl bg-white p-4">
             <dt className="text-sm font-bold">Tax you prepaid</dt>
             <dd className="mt-1 text-2xl font-black">{money(state.fixed.prepaidAmount)}</dd>
           </div>
+          <div className="rounded-xl bg-white p-4">
+            <dt className="text-sm font-bold">Tax Prepayment percentage</dt>
+            <dd className="mt-1 text-2xl font-black">{state.fixed.ratePct}%</dd>
+          </div>
         </dl>
+        <p className="mt-3 text-sm text-[var(--brand-navy)]/75">
+          {state.fixed.calculationBase === "income-tax-before-credits" && state.fixed.baseAmount !== null
+            ? `Tax Prepayment is ${state.fixed.ratePct}% of Income Tax Before Credits (${money(state.fixed.baseAmount)}), rounded to the nearest whole dollar. Credits do not reduce this prepaid amount.`
+            : "This prepayment was already fixed under the previous calculated-tax basis. Its saved amount has not been changed."}
+        </p>
         {preview ? (
           <div className="mt-3 rounded-xl bg-white p-4">
             <p className="text-2xl font-black">
@@ -175,6 +196,11 @@ export default function TaxPrepayment({ round, player, pathwayId, onFixedChange 
     if (redrawing) {
       return (
         <div>
+          <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">
+            Tax Prepayment is calculated as the selected Tax Prepayment percentage of Income Tax Before Credits,
+            rounded to the nearest whole dollar. It represents tax paid during the year, before credits determine
+            your final calculated tax.
+          </p>
           <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
             Redraw: shuffle the Tax Prepayment deck and physically draw another card. Your second card will be
             final, even if it is lower or higher than your first.

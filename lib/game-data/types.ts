@@ -112,6 +112,9 @@ export type ApprovedGameRules = {
   taxPrepayment: {
     fixedAtApplication: boolean;
     auditChangesFinalLiabilityNotOriginalPayment: boolean;
+    calculationBase: string;
+    rounding: string;
+    source: string;
   };
   physicalDeck: {
     sharedAcrossStudents: boolean;

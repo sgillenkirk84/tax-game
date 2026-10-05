@@ -24,13 +24,13 @@ export const REDRAW_THRESHOLD_PCT = 90;
 // Entrepreneur and Side Hustler get an educational note; their arithmetic is unchanged.
 const ESTIMATED_PAYMENT_PATHWAYS = ["PATH-002", "PATH-006"];
 
-// Prepayment = calculated tax x rate, rounded to the nearest whole dollar with
+// Prepayment = income tax before credits x rate, rounded to the nearest whole dollar with
 // halves rounding up. Integer cents avoid floating-point drift.
-export function calculatePrepaymentDollars(calculatedTax: number, ratePct: number): number {
-  if (!Number.isFinite(calculatedTax) || calculatedTax < 0 || !Number.isFinite(ratePct) || ratePct < 0) {
+export function calculatePrepaymentDollars(taxBeforeCredits: number, ratePct: number): number {
+  if (!Number.isFinite(taxBeforeCredits) || taxBeforeCredits < 0 || !Number.isFinite(ratePct) || ratePct < 0) {
     throw new RangeError("Tax and rate must be finite and non-negative.");
   }
-  return Math.floor((Math.round(calculatedTax * 100) * ratePct + 5000) / 10000);
+  return Math.floor((Math.round(taxBeforeCredits * 100) * ratePct + 5000) / 10000);
 }
 
 export type SettlementPreview = { kind: "refund" | "due" | "settled"; amount: number };
@@ -61,6 +61,8 @@ export type PrepaymentState = {
   // for keep or redraw. fixed: the prepayment is locked.
   status: "none" | "provisional" | "fixed";
   calculatedTax: number | null;
+  taxBeforeCredits: number | null;
+  creditsApplied: number | null;
   cards: PrepaymentCard[];
   redrawEligible: boolean;
   fixed: {
@@ -69,6 +71,8 @@ export type PrepaymentState = {
     prepaidAmount: number;
     redrawUsed: boolean;
     firstCardId: string | null;
+    calculationBase: "income-tax-before-credits" | "legacy-final-tax";
+    baseAmount: number | null;
   } | null;
   showEstimatedPaymentNote: boolean;
 };
@@ -103,12 +107,21 @@ export function summarizePrepayment(stored: unknown): PrepaymentState | null {
     ) {
       return null;
     }
+    const usesPreCreditBase = raw.calculation_base === "income-tax-before-credits";
+    if (
+      (raw.calculation_base !== undefined && !usesPreCreditBase) ||
+      (usesPreCreditBase && (num(raw.tax_before_credits) === null || Number(raw.tax_before_credits) < 0))
+    ) {
+      return null;
+    }
     fixed = {
       cardId: raw.card_id,
       ratePct: raw.rate_pct as number,
       prepaidAmount: raw.prepaid_amount as number,
       redrawUsed: raw.redraw_used === true,
       firstCardId: typeof raw.first_card_id === "string" ? raw.first_card_id : null,
+      calculationBase: usesPreCreditBase ? "income-tax-before-credits" : "legacy-final-tax",
+      baseAmount: usesPreCreditBase ? num(raw.tax_before_credits) : num(raw.calculated_tax),
     };
   }
 
@@ -116,10 +129,19 @@ export function summarizePrepayment(stored: unknown): PrepaymentState | null {
   if (stored.calculated_tax !== null && calculatedTax === null) {
     return null;
   }
+  const taxBeforeCredits = num(stored.tax_before_credits);
+  const creditsApplied = num(stored.credits_applied);
+  for (const key of ["tax_before_credits", "credits_applied"] as const) {
+    if (stored[key] !== undefined && stored[key] !== null && (num(stored[key]) === null || Number(stored[key]) < 0)) {
+      return null;
+    }
+  }
 
   return {
     status: fixed ? "fixed" : cards.length > 0 ? "provisional" : "none",
     calculatedTax,
+    taxBeforeCredits,
+    creditsApplied,
     cards,
     redrawEligible: !fixed && stored.redraw_eligible === true,
     fixed,

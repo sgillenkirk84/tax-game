@@ -45,11 +45,71 @@ test("prepayment rounds to whole dollars, halves up, and is zero for zero tax", 
   }
 });
 
-test("a $5,000 calculated tax prepays the expected amounts", () => {
+test("a $5,000 income tax before credits prepays the expected amounts", () => {
   assert.equal(calculatePrepaymentDollars(5000, PREPAYMENT_RATES_PCT["PRE-001"]), 2000);
   assert.equal(calculatePrepaymentDollars(5000, PREPAYMENT_RATES_PCT["PRE-005"]), 5000);
   assert.equal(calculatePrepaymentDollars(5000, PREPAYMENT_RATES_PCT["PRE-008"]), 6500);
   assert.equal(calculatePrepaymentDollars(5000, PREPAYMENT_RATES_PCT["PRE-010"]), 0);
+});
+
+test("new prepayment snapshot restores a positive payment and refund despite zero final tax", () => {
+  for (const round of [1, 2, 3, 4, 5]) {
+    const restored = summarizePrepayment({
+      round_number: round, calculated_tax: 0, tax_before_credits: 1757, credits_applied: 1757,
+      cards: [{ card_id: "PRE-003", rate_pct: 80 }],
+      prepayment: {
+        card_id: "PRE-003", rate_pct: 80, prepaid_amount: 1406, calculated_tax: 0,
+        calculation_base: "income-tax-before-credits", tax_before_credits: 1757,
+      },
+    });
+    assert.equal(restored?.taxBeforeCredits, 1757);
+    assert.equal(restored?.creditsApplied, 1757);
+    assert.equal(restored?.calculatedTax, 0);
+    assert.equal(restored?.fixed?.baseAmount, 1757);
+    assert.equal(restored?.fixed?.calculationBase, "income-tax-before-credits");
+    assert.equal(restored?.fixed?.prepaidAmount, 1406);
+    assert.deepEqual(settlementPreview(restored.calculatedTax, restored.fixed.prepaidAmount), { kind: "refund", amount: 1406 });
+  }
+});
+
+test("legacy fixed prepayments restore unchanged instead of being recalculated", () => {
+  const stored = {
+    calculated_tax: 0, tax_before_credits: 1757, credits_applied: 1757,
+    cards: [{ card_id: "PRE-003", rate_pct: 80 }],
+    prepayment: { card_id: "PRE-003", rate_pct: 80, prepaid_amount: 0, calculated_tax: 0 },
+  };
+  const before = structuredClone(stored);
+  const restored = summarizePrepayment(stored);
+  assert.equal(restored?.fixed?.prepaidAmount, 0);
+  assert.equal(restored?.fixed?.calculationBase, "legacy-final-tax");
+  assert.equal(restored?.fixed?.baseAmount, 0);
+  assert.deepEqual(stored, before);
+  assert.equal(summarizePrepayment({
+    ...stored, prepayment: { ...stored.prepayment, calculation_base: "income-tax-before-credits" },
+  }), null);
+});
+
+test("global pre-credit migration preserves saved tax, historical guards and restricted access", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20261005130000_precredit_tax_prepayment.sql", import.meta.url), "utf8");
+  assert.match(sql, /prepaid := pg_catalog\.round\(tax_before_credits \* p_rate_pct \/ 100, 0\)/);
+  assert.doesNotMatch(sql, /prepaid := pg_catalog\.round\(tax \*/);
+  assert.match(sql, /tax_before_credits is distinct from round_row\.tax_before_credits/);
+  assert.match(sql, /tax is distinct from round_row\.final_tax_liability/);
+  assert.match(sql, /round_row\.status <> 'in_progress'/);
+  assert.match(sql, /PREPAYMENT_ALREADY_FIXED/);
+  assert.match(sql, /'calculated_tax', tax/);
+  assert.match(sql, /'calculation_base', 'income-tax-before-credits'/);
+  assert.match(sql, /'credits_applied'/);
+  assert.match(sql, /security definer\s+set search_path = pg_catalog/);
+  assert.match(sql, /grant execute on function public\.get_round_prepayment\(uuid, text\) to service_role/);
+  assert.doesNotMatch(sql, /grant execute on function public\.mm_fix_round_prepayment/);
+  assert.doesNotMatch(sql, /current_round\s*(?:=|<>|between)|round_number\s*(?:= \d|between)/);
+  assert.doesNotMatch(sql, /set (?:final_tax_liability|tax_before_credits|credits_total)\s*=|alter table|insert into public\.mm_game/);
+  assert.equal(dataset.gameRules.approved.taxPrepayment.calculationBase, "income-tax-before-credits");
+  assert.equal(dataset.gameRules.approved.taxPrepayment.rounding, "nearest-whole-dollar-halves-up");
+  for (const card of cards.filter((card) => card.id !== "PRE-010")) {
+    assert.match(card.taxRule, /Income Tax Before Credits/);
+  }
 });
 
 test("only a Corporate Climber with a first card below 90% may redraw", () => {

@@ -4,6 +4,7 @@ import test from "node:test";
 import { computeRoundResults, economicGrossIncome, pendingCashEffects, resultsAvailableForRound, summarizeStoredResults, toFinalizePayload } from "./round-results.ts";
 import { ACTIVE_ROUND_FLOW, advanceTarget, ROUND_FLOW } from "./round-stages.ts";
 import { calculatePrepaymentDollars } from "./tax-prepayment.ts";
+import { LEDGER_ROUNDS, lifeLedgerRows, loadEarlierLedgerRounds } from "./life-ledger.ts";
 
 const base = {
   beginningCash: 10000,
@@ -52,6 +53,65 @@ function roundTwoStored(auditResolution: "not-triggered" | "bypassed-beta") {
     },
   };
 }
+
+test("Life Ledger aligns saved rounds by number without recalculation or mutation", () => {
+  const second = summarizeStoredResults(roundTwoStored("bypassed-beta"))!;
+  const first = { ...second, roundNumber: 1, grossIncome: 12345, taxPrepaid: 999, taxRefund: 7, filingStatus: "HOH", homeowner: false, activeDependents: 1, details: null };
+  const input = [second, first];
+  const before = structuredClone(input);
+  const rows = lifeLedgerRows(input);
+  const values = (label: string) => rows.find((row) => row.label === label)!.values;
+  assert.deepEqual(LEDGER_ROUNDS, [1, 2, 3, 4, 5]);
+  assert.deepEqual(values("Gross income"), ["$12,345", "$35,000", "\u2014", "\u2014", "\u2014"]);
+  assert.deepEqual(values("Tax you prepaid"), ["$999", "$368", "\u2014", "\u2014", "\u2014"]);
+  assert.deepEqual(values("Tax refund").slice(0, 2), ["$7", "$368"]);
+  assert.deepEqual(values("Filing status").slice(0, 2), ["Head of household", "Married filing jointly"]);
+  assert.deepEqual(values("Homeowner").slice(0, 2), ["No", "Yes"]);
+  assert.deepEqual(values("Active dependents").slice(0, 2), ["1", "2"]);
+  assert.deepEqual(values("Tax Prepayment percentage").slice(0, 2), ["\u2014", "105%"]);
+  assert.deepEqual(values("Audit resolution").slice(0, 2), ["\u2014", "bypassed-beta (temporary; unresolved)"]);
+  assert.deepEqual(values("Calculated tax after credits").slice(0, 2), ["$0", "$0"]);
+  assert.deepEqual(input, before);
+  assert.deepEqual(lifeLedgerRows(JSON.parse(JSON.stringify(input))), rows);
+  const fifth = { ...second, roundNumber: 5, grossIncome: 54321 };
+  assert.equal(lifeLedgerRows([fifth]).find((row) => row.label === "Gross income")!.values[4], "$54,321");
+});
+
+test("Life Ledger reloads earlier finalized snapshots through the existing read-only endpoint", async () => {
+  const second = summarizeStoredResults(roundTwoStored("not-triggered"))!;
+  const first = { ...second, roundNumber: 1, grossIncome: 12345 };
+  const calls: number[] = [];
+  const request: typeof fetch = async (url, init) => {
+    assert.equal(url, "/api/rounds/results");
+    assert.equal(init?.method, "POST");
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.id, "test-player");
+    assert.equal(body.resumeToken, "test-token");
+    calls.push(body.round);
+    return Response.json({ finalized: true, results: first });
+  };
+  const player = { id: "test-player", resumeToken: "test-token" };
+  const signal = new AbortController().signal;
+  const history = await loadEarlierLedgerRounds(player, 2, signal, request);
+  assert.deepEqual(calls, [1]);
+  assert.deepEqual(history, [first]);
+  assert.deepEqual(await loadEarlierLedgerRounds(player, 2, signal, request), history);
+  assert.deepEqual(await loadEarlierLedgerRounds(player, 1, signal, request), []);
+  await assert.rejects(loadEarlierLedgerRounds(player, 2, signal, async () => Response.json({ finalized: true, results: second })), /Round 1/);
+  await assert.rejects(loadEarlierLedgerRounds(player, 2, signal, async () => Response.json({ finalized: false })), /Round 1/);
+  await assert.rejects(loadEarlierLedgerRounds(player, 2, signal, async () => Response.json({ error: "Storage unavailable." }, { status: 503 })), /Storage unavailable/);
+});
+
+test("Life Ledger keeps a semantic five-column table in a focusable horizontal scroll region", () => {
+  const source = readFileSync(new URL("../components/life-ledger.tsx", import.meta.url), "utf8");
+  assert.match(source, /overflow-x-auto/);
+  assert.match(source, /min-w-\[1050px\]/);
+  assert.match(source, /tabIndex=\{0\}/);
+  assert.match(source, /scope="col"/);
+  assert.match(source, /scope="row"/);
+  assert.match(source, /LEDGER_ROUNDS\.map/);
+  assert.doesNotMatch(source, /computeRoundResults|calculate|results-finalize/);
+});
 
 test("Round 2 restored Results preserve $368, saved household, assets and capped debt payment", () => {
   const stored = roundTwoStored("not-triggered");

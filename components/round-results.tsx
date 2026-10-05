@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import type { StoredResults } from "@/lib/round-results";
 import { clientMaxEnabledRound } from "@/lib/round-limits";
+import LifeLedger from "@/components/life-ledger";
 
 type RoundResultsProps = {
   round: number;
@@ -297,6 +298,7 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           />
         ))}
       </Section>
+      <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
       {nextEnabled ? (
         <div className="mt-4">
           <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">

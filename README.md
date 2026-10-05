@@ -120,3 +120,12 @@ settings still apply. Start Round 3 is offered only from finalized Results when
 Round 3 is already enabled; its existing RPC requires the prior finalized round.
 Round 3 Tax Prepayment/Results and Rounds 4-5 remain outside this milestone.
 No migration is executed by the application.
+
+## Life Ledger columns (TASK 10.15.13)
+
+The finalized Results view includes a read-only Life Ledger table: categories
+are rows and Rounds 1-5 are columns. Earlier finalized rounds are restored through
+the existing Results endpoint; current Results and all financial calculations
+remain unchanged. Unfinished rounds and fields absent from older snapshots show
+a dash, never a recalculated value. The table preserves its columns on narrow
+screens inside a keyboard-focusable horizontal scroll region.

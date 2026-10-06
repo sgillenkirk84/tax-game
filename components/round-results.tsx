@@ -4,7 +4,10 @@ import { startTransition, useCallback, useEffect, useRef, useState } from "react
 import type { StoredResults } from "@/lib/round-results";
 import { clientMaxEnabledRound } from "@/lib/round-limits";
 import { MAX_PLAYABLE_ROUND } from "@/lib/round-rules";
-import LifeLedger from "@/components/life-ledger";
+import LifeLedger, { type LedgerHistory } from "@/components/life-ledger";
+import HighlightReel from "@/components/highlight-reel";
+import { loadEarlierLedgerRounds } from "@/lib/life-ledger";
+import { buildHighlightReel } from "@/lib/highlight-reel";
 import { getRoundIncomeCardCategory } from "@/lib/round-income";
 
 type RoundResultsProps = {
@@ -86,8 +89,44 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
   const finishKey = useRef<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
+  const [view, setView] = useState<"results" | "highlights">("results");
+  const [history, setHistory] = useState<LedgerHistory>({ rounds: [], error: "", loading: true });
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const resultsHeading = useRef<HTMLHeadingElement>(null);
+  const highlightHeading = useRef<HTMLHeadingElement>(null);
+  const finalizedRound = results?.roundNumber;
+  const { id, resumeToken } = player;
   const nextRound = round + 1;
   const nextEnabled = nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound();
+
+  useEffect(() => {
+    if (finalizedRound === undefined) return;
+    const controller = new AbortController();
+    void loadEarlierLedgerRounds({ id, resumeToken }, finalizedRound, controller.signal).then(
+      (rounds) => {
+        if (!controller.signal.aborted) setHistory({ rounds, error: "", loading: false });
+      },
+      (caught: unknown) => {
+        if (!controller.signal.aborted) {
+          setHistory({
+            rounds: [], loading: false,
+            error: caught instanceof Error ? caught.message : "Could not load your Life Ledger.",
+          });
+        }
+      },
+    );
+    return () => controller.abort();
+  }, [id, resumeToken, finalizedRound, historyRetry]);
+
+  useEffect(() => {
+    if (view === "highlights") highlightHeading.current?.focus();
+    else resultsHeading.current?.focus();
+  }, [view]);
+
+  function retryHistory() {
+    setHistory((previous) => ({ ...previous, loading: true, error: "" }));
+    setHistoryRetry((value) => value + 1);
+  }
 
   const restore = useCallback(async () => {
     try {
@@ -222,6 +261,16 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
     );
   }
 
+  if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "highlights") {
+    const recap = history.loading ? null : history.error
+      ? { ok: false as const, error: history.error }
+      : buildHighlightReel([...history.rounds, results]);
+    return (
+      <HighlightReel result={recap} loading={history.loading} onRetry={retryHistory}
+        onBack={() => setView("results")} headingRef={highlightHeading} />
+    );
+  }
+
   const taxResult =
     results.taxRefund > 0
       ? `Your tax refund: ${money(results.taxRefund)}`
@@ -234,7 +283,7 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
       <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-gold)]">
         Round {results.roundNumber} complete
       </p>
-      <h2 className="mt-2 text-2xl font-black">Round {results.roundNumber} Results</h2>
+      <h2 ref={resultsHeading} tabIndex={-1} className="mt-2 text-2xl font-black">Round {results.roundNumber} Results</h2>
       <dl className="mt-3">
         <Row label="Pathway" value={pathwayNames[results.pathwayId] ?? results.pathwayId} />
         <Row label="Scenario" value={scenarioNames[results.scenarioId] ?? results.scenarioId} />
@@ -302,14 +351,18 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           />
         ))}
       </Section>
-      {results.roundNumber < MAX_PLAYABLE_ROUND ? (
-        <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
-      ) : null}
+      <LifeLedger current={results} history={history} onRetry={retryHistory} />
       {results.roundNumber === MAX_PLAYABLE_ROUND ? (
-        <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
-          Your five-round financial game is complete. All five rounds of Results and your Life Ledger
-          are saved. There is no next round. My Tax Life Story is not available yet.
-        </p>
+        <div className="mt-4">
+          <p role="status" className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+            Your five-round financial game is complete. All five rounds of Results and your Life Ledger
+            are saved. There is no next round. My Tax Life Story is not available yet.
+          </p>
+          <button type="button" onClick={() => setView("highlights")}
+            className="mt-3 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white">
+            View Highlight Reel
+          </button>
+        </div>
       ) : nextEnabled ? (
         <div className="mt-4">
           <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
@@ -334,9 +387,6 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           Round {results.roundNumber} is complete. Your teacher will let you know when the next round opens.
         </p>
       )}
-      {results.roundNumber === MAX_PLAYABLE_ROUND ? (
-        <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
-      ) : null}
     </section>
   );
 }

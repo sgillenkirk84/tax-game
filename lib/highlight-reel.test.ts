@@ -322,16 +322,93 @@ test("Life Ledger loading is reused, incomplete fetches fail, table and financia
   await assert.rejects(loadEarlierLedgerRounds({ id: "player", resumeToken: "token" }, 5,
     new AbortController().signal, async () => Response.json({ finalized: false })));
   const ledger = read("../components/life-ledger.tsx");
-  assert.equal(ledger.split("void loadEarlierLedgerRounds(").length - 1, 1);
-  assert.match(ledger, /buildHighlightReel\(\[\.\.\.history.rounds, current\]\)/);
-  assert.match(ledger, /current.roundNumber === 5/);
-  assert.ok(ledger.indexOf("<HighlightReel") < ledger.indexOf('id="life-ledger-heading"'));
+  const owner = read("../components/round-results.tsx");
+  assert.equal(owner.split("void loadEarlierLedgerRounds(").length - 1, 1);
+  assert.match(owner, /buildHighlightReel\(\[\.\.\.history.rounds, results\]\)/);
+  assert.match(owner, /<LifeLedger current=\{results\} history=\{history\} onRetry=\{retryHistory\}/);
+  assert.doesNotMatch(ledger, /HighlightReel|buildHighlightReel|fetch\(|loadEarlierLedgerRounds/);
   for (const invariant of ["min-w-[1050px]", 'scope="col"', 'scope="row"', "LEDGER_ROUNDS.map"]) assert.ok(ledger.includes(invariant));
   const ui = read("../components/highlight-reel.tsx");
   assert.match(ui, /Your game remains finalized/);
-  assert.match(ui, /View Full Life Ledger/);
+  assert.match(ui, /Back to Round 5 Results/);
   assert.match(ui, /role="alert"/);
   assert.doesNotMatch(ui, /fetch\(|results-finalize|Round 6|generate|model/);
   const logic = read("./highlight-reel.ts");
   assert.doesNotMatch(logic, /computeRoundResults|calculatePrepayment|buildRoundTax|game-calculations|Math.random|Date.now|new Date|fetch\(|supabase|resultMessage|educationMessage/);
+});
+
+test("only finalized Round 5 opens a separate recap; Results and five-column ledger are not stacked into it", () => {
+  const owner = read("../components/round-results.tsx");
+  const branch = owner.slice(owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "highlights")'),
+    owner.indexOf("const taxResult ="));
+  assert.ok(branch.length > 0);
+  assert.ok(owner.indexOf("if (!results)") < owner.indexOf(branch), "saved Results are required first");
+  assert.match(branch, /return \([\s\S]*<HighlightReel/);
+  assert.match(branch, /onBack=\{\(\) => setView\("results"\)\}/);
+  assert.doesNotMatch(branch, /<LifeLedger|<Row|<Section|finish\(|startNext\(/);
+  const normal = owner.slice(owner.indexOf("const taxResult ="));
+  assert.doesNotMatch(normal, /<HighlightReel/);
+  assert.match(normal, /Round \{results.roundNumber\} Results/);
+  assert.match(normal, /<LifeLedger current=\{results\} history=\{history\}/);
+  assert.ok(normal.indexOf("<LifeLedger") < normal.indexOf("View Highlight Reel"));
+  assert.match(normal, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*onClick=\{\(\) => setView\("highlights"\)\}[\s\S]*View Highlight Reel[\s\S]*nextEnabled/);
+  assert.match(normal, /onClick=\{\(\) => void startNext\(\)\}[\s\S]*Start Round \$\{nextRound\}/);
+  assert.match(owner, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
+  assert.doesNotMatch(normal, /Start Round 6|Continue to Round 6|>Next Round</);
+});
+
+test("recap navigation and refresh use only local view state; shared history survives view changes", () => {
+  const owner = read("../components/round-results.tsx");
+  assert.match(owner, /useState<"results" \| "highlights">\("results"\)/);
+  assert.match(owner, /\[id, resumeToken, finalizedRound, historyRetry\]/);
+  assert.doesNotMatch(owner, /\[id, resumeToken, finalizedRound, historyRetry, view\]/);
+  assert.match(owner, /if \(finalizedRound === undefined\) return/);
+  assert.match(owner, /return \(\) => controller.abort\(\)/);
+  assert.match(owner, /\[restore\]/);
+  assert.doesNotMatch(owner, /\[restore, view\]|localStorage|sessionStorage|pushState|router\.push/);
+  const branch = owner.slice(owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "highlights")'),
+    owner.indexOf("const taxResult ="));
+  assert.doesNotMatch(branch, /setResults|fetch\(|finish\(|startNext\(|results-finalize|next-round|snapshot/);
+  assert.match(owner, /highlightHeading.current\?\.focus\(\)/);
+  assert.match(owner, /resultsHeading.current\?\.focus\(\)/);
+});
+
+test("recap history errors and loading preserve completion with retry and unconditional back navigation", () => {
+  const owner = read("../components/round-results.tsx");
+  assert.match(owner, /const recap = history.loading \? null : history.error[\s\S]*ok: false[\s\S]*buildHighlightReel/);
+  assert.match(owner, /function retryHistory\(\)[\s\S]*setHistory\(\(previous\) => \(\{ \.\.\.previous, loading: true, error: "" \}\)\)[\s\S]*setHistoryRetry/);
+  const ui = read("../components/highlight-reel.tsx");
+  assert.match(ui, /<h2[^>]*id="highlight-reel-heading"[^>]*>My Tax Life &mdash; Highlight Reel/);
+  assert.match(ui, /Your game is finalized\. Loading/);
+  assert.match(ui, /Your game remains finalized/);
+  assert.match(ui, /onClick=\{onRetry\}>Try loading history again/);
+  assert.ok(ui.indexOf("onClick={onBack}") > ui.indexOf(") : null}"), "back is present for loading, error and success");
+  assert.match(ui, /onClick=\{onBack\}[^>]*>Back to Round 5 Results/);
+  assert.doesNotMatch(ui, /fetch\(|results-finalize|next-round|Round 6|generate|model|life.status/);
+});
+
+test("saved history is reusable across recap opens and refresh without writes or mutation", async () => {
+  const input = history();
+  input[4].taxRefund = 169.5;
+  input[4].taxPrepaid = 269.5;
+  const before = structuredClone(input);
+  const requests: number[] = [];
+  const loaded = await loadEarlierLedgerRounds({ id: "player", resumeToken: "token" }, 5,
+    new AbortController().signal, async (url, init) => {
+      assert.equal(url, "/api/rounds/results", "only authenticated saved history is read");
+      const { round } = JSON.parse(String(init?.body));
+      requests.push(round);
+      return Response.json({ finalized: true, results: input[round - 1] });
+    });
+  const savedHistory = [...loaded, input[4]];
+  const ledger = lifeLedgerRows(savedHistory);
+  const firstOpen = buildHighlightReel(savedHistory);
+  assert.ok(firstOpen.ok);
+  assert.ok(firstOpen.highlights.some((fact) => fact.value.includes("$169.50")));
+  assert.deepEqual(buildHighlightReel(savedHistory), firstOpen);
+  assert.deepEqual(lifeLedgerRows(savedHistory), ledger);
+  assert.deepEqual(buildHighlightReel(JSON.parse(JSON.stringify(savedHistory))), firstOpen);
+  assert.deepEqual(requests, [1, 2, 3, 4], "navigation needs no additional history reads");
+  assert.deepEqual(input, before);
+  assert.ok(ledger.every((row) => row.values.length === 5));
 });

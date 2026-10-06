@@ -497,3 +497,22 @@ No API route, persistence, migration, database access widening, financial change
 environment change or Round 6 is added. Database life status remains unchanged.
 This local task does not execute SQL, modify Supabase, commit, push or deploy.
 The Highlight Reel itself is not yet live-verified.
+
+## Separate post-game recap navigation (TASK 10.15.44)
+
+The user confirmed that Highlight Reel v1 is deployed and renders successfully.
+This locally implemented UX correction removes it from the Round 5 Results
+stack. Saved Results and the unchanged five-column Life Ledger now end with
+View Highlight Reel, which opens a separate read-only recap. Back to Round 5
+Results returns to the same saved information without finalizing again.
+
+Round Results owns local view state and the existing authenticated ledger-history
+load. Both views share the loaded history; opening/back navigation does not
+refetch it. Refresh returns to saved Results and allows reopening the reel.
+Recap loading/errors remain separate from financial completion, with retry and
+back navigation available. Rounds 1-4 retain their existing next-round actions.
+
+The deterministic selector, cents, evidence rules and factual wording are
+unchanged. No API, persistence, migration, financial operation, database life
+status change, AI or Round 6 is added. This navigation change is locally
+validated, not yet published or Production/live-verified.

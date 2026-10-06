@@ -1,7 +1,7 @@
 import { MAX_PLAYABLE_ROUND } from "./round-rules.ts";
 
-// Round 4 foundation is opt-in; existing unset/empty configuration still opens through Round 3.
-const DEFAULT_MAX_ROUND = 3;
+// Round 5 opening is opt-in; unset/empty configuration opens through completed Round 4.
+const DEFAULT_MAX_ROUND = 4;
 
 export function parseMaxEnabledRound(value: string | undefined): number {
   if (value === undefined || value.trim() === "") {

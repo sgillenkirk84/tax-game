@@ -1,6 +1,6 @@
 // Pure round rules shared by the tax builder and the tests. No card data and no imports.
 
-export const MAX_PLAYABLE_ROUND = 4;
+export const MAX_PLAYABLE_ROUND = 5;
 
 // The requested target is also the retry identity; never infer a later target on retry.
 export function authorizeNextRound(

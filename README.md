@@ -280,8 +280,9 @@ The opening transition was live-verified: Early Retiree received Retirement card
 and a regular pathway received Income cards. Round 4 through saved Tax Calculation
 was live-verified after manual installation in TEST/Production and redeployment.
 Tax Prepayment was subsequently published and is now publicly live-verified on
-the Production Vercel deployment. Round 4 Results/Life Ledger are not yet
-live-verified; Round 4 completion is not claimed.
+the Production Vercel deployment. At TASK 10.15.31, Round 4 Results/Life Ledger
+were not yet live-verified and completion was not claimed. The subsequent
+Round 4 completion is recorded below.
 
 This local extension reuses the shared atomic finalizer and rounds-as-columns
 ledger. It consumes saved tax outputs and the persisted fixed Tax Prepayment,
@@ -295,3 +296,35 @@ Tax Prepayment-to-Results advancement and shared finalization gates through Roun
 The existing immutable `{round, cards}` snapshot and read path need no schema change.
 Rounds 1-3 history is untouched. Round 5 start/gameplay remain closed.
 The migration has not been executed; no environment values change.
+
+## Round 5 opening and universal Retirement (TASK 10.15.33)
+
+The Round 4 Results migration was manually installed successfully in TEST and
+Production. The live Production game finalized Round 4, saved its Life Ledger
+state, and reached the ready-for-Round-5 boundary. Round 4 is now complete.
+Round 5 gameplay has not yet been enabled or live-verified.
+
+This locally implemented opening reuses the shared next-round/recovery RPC and
+card-entry flow. Every pathway draws one physical card from the Retirement deck
+in Round 5. Side Hustler's two Income cards, Entrepreneur's extra Business Income
+opportunity, and Corporate Climber's working-life replacement do not apply.
+The saved authoritative card ID/category resolve to the unchanged workbook-backed
+Retirement components; no tax calculation occurs during opening.
+
+Finalized Round 4 cash/debt become Round 5 beginning balances. Household, pathway,
+Caregiver's permanent dependent, homeowner state, investments and persistent
+state remain in the same life. Only the normal new-round expiration applies to
+active effects past their last round; permanent and removed effects are untouched.
+Investment income is not calculated or duplicated during opening.
+
+`supabase/migrations/20261005220000_round_five_opening.sql` widens only
+`start_next_round` through Round 5 and the first-card branch of `record_round_card`.
+After the Retirement card is saved/restored, play stops. Round 5 Life Event and
+all later stages, including final completion/story, remain closed.
+Finalized Rounds 1-4 are not rewritten.
+
+The code-supported hard maximum becomes 5; unset/empty round limits default to 4.
+Explicit lower values remain respected. A later authorized rollout must set
+**both** `NEXT_PUBLIC_MAX_ENABLED_ROUND=5` and `MAX_ENABLED_ROUND=5`, after migration
+installation and publication. This task changes neither environment variable,
+executes no SQL, and does not commit, push or deploy.

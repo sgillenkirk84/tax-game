@@ -69,7 +69,8 @@ export function expectedCategoryFor(stage: CardStage, pathwayId: string, round: 
 export type StageCardRules = { min: number; max: number };
 
 export function isRoundCardStageAvailable(stage: CardStage, round: number): boolean {
-  return Number.isInteger(round) && round >= 1 && round <= 4
+  return Number.isInteger(round) && round >= 1
+    && (round <= 4 || (round === 5 && stage === "income-or-retirement"))
     && stage !== "audit-if-triggered";
 }
 

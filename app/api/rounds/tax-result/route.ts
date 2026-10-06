@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  if (!serverRoundEnabled(body.round as number)) {
+  if (!serverRoundEnabled(body.round) || body.round > 4) {
     return Response.json({ error: "This round is not available yet." }, { status: 409 });
   }
 

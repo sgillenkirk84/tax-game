@@ -6,6 +6,7 @@ import { isValidCardChoice, stageCardRules } from "./card-entry.ts";
 import { advanceTarget } from "./round-stages.ts";
 import { computeRoundResults, resultsAvailableForRound } from "./round-results.ts";
 import { buildRoundTaxCalculation, type RoundTaxSnapshot } from "./round-tax.ts";
+import { calculateEarlyRetirementIncome } from "./game-calculations/calculations.ts";
 import {
   calculatePrepaymentDollars,
   canRedraw,
@@ -307,9 +308,9 @@ test("Round 3 gate migration extends exact installed definitions without touchin
 test("Round 3 UI requires saved tax and fixed physical Prepayment before offering Results", () => {
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
   const dashboard = read("../components/round-dashboard.tsx");
-  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 4/);
+  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 5/);
   assert.match(dashboard, /prepaymentFixed && resultsEnabled && advanceEnabled && target/);
-  assert.match(dashboard, /round >= 2 && round <= 4 && prepaymentFixed && \(!target \|\| !resultsEnabled \|\| !advanceEnabled\)/);
+  assert.match(dashboard, /round >= 2 && round <= 5 && prepaymentFixed && \(!target \|\| !resultsEnabled \|\| !advanceEnabled\)/);
   const ui = read("../components/tax-prepayment.tsx");
   assert.match(ui, /<CardEntry[\s\S]*stage="tax-prepayment"/);
   assert.match(ui, /physically draw/);
@@ -318,7 +319,7 @@ test("Round 3 UI requires saved tax and fixed physical Prepayment before offerin
   assert.match(entry, /idempotencyKey/);
   assert.doesNotMatch(entry, /Math\.random/);
   for (const route of ["prepayment", "prepayment-keep"]) {
-    assert.match(read(`../app/api/rounds/${route}/route.ts`), /serverRoundEnabled\(body.round\).*body.round > 4/);
+    assert.match(read(`../app/api/rounds/${route}/route.ts`), /serverRoundEnabled\(body.round\).*body.round > 5/);
   }
   for (const route of ["results", "results-finalize"]) {
     assert.match(read(`../app/api/rounds/${route}/route.ts`), /resultsAvailableForRound\(body.round, serverMaxEnabledRound\(\)\)/);
@@ -379,13 +380,14 @@ test("Round 4 Retirement saved tax feeds every shared physical prepayment rate w
   assert.doesNotMatch(helper, /calculateEarlyRetirementIncome|income_components|gross_income|adjusted_gross_income|taxable_income/);
 });
 
-test("Round 4 fixed payment restores as stored, enables shared Results, and Round 5 stays closed", () => {
+test("Round 4 fixed payment restores as stored and enables shared Results; Round 5 stops at Prepayment", () => {
   assert.equal(advanceTarget("deduction", 4)?.stage, "tax-prepayment");
   assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
   assert.equal(resultsAvailableForRound(4, 4), true);
   assert.equal(resultsAvailableForRound(5, 5), false);
-  assert.equal(advanceTarget("deduction", 5), null);
-  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-008", 5), { min: 0, max: 0 });
+  assert.equal(advanceTarget("deduction", 5)?.stage, "tax-prepayment");
+  assert.equal(advanceTarget("tax-prepayment", 5), null);
+  assert.deepEqual(stageCardRules("tax-prepayment", "PATH-008", 5), { min: 1, max: 1 });
   const stored = {
     pathway_id: "PATH-001", round_number: 4, calculated_tax: 0, tax_before_credits: 350, credits_applied: 350,
     cards: [{ card_id: "PRE-002", rate_pct: 60 }, { card_id: "PRE-002", rate_pct: 60 }],
@@ -509,4 +511,137 @@ test("restores a provisional Climber card, a redraw and a fixed prepayment", () 
   assert.equal(none?.status, "none");
   assert.equal(none?.showEstimatedPaymentNote, true);
   assert.equal(summarizePrepayment({ cards: "bad" }), null);
+});
+
+test("Round 5 all pathways consume saved Retirement tax with every authoritative prepayment rate and restore without recalculation", () => {
+  for (const pathway of dataset.pathways) {
+    const input: RoundTaxSnapshot = {
+      life: {
+        id: "life", status: "in_progress", pathway_id: pathway.id,
+        starting_decision_id: "starting-from-scratch", tax_year: 2025, rules_version: "retirement-prepayment",
+        current_round: 5, current_stage: "deduction", filing_status: "SINGLE",
+        homeowner: false, cash_resources: 0, student_loan_debt: 0,
+        ...(pathway.id === "PATH-008" ? {
+          previous_retirement_package: calculateEarlyRetirementIncome({ roundNumber: 4, retirementCardId: "RET-MIX-003" }),
+        } : {}),
+      },
+      round: {
+        id: "round", round_number: 5, status: "in_progress", current_stage: "deduction",
+        beginning_cash_resources: 0, beginning_student_loan_debt: 0, calculation: null,
+      },
+      cards: [
+        ["RET-MIX-003", "income-or-retirement"], ["LIFE-005", "life-event"],
+        ["WILD-006", "wildcard"], ["DED-001", "deduction"],
+      ].map(([card_id, stage]) => ({ history_id: stage, card_id, stage, order_in_stage: 1, choices: null })),
+      investments: [], effects: [],
+    };
+    const built = buildRoundTaxCalculation(input);
+    assert.ok(built.ok, pathway.id);
+    const saved = structuredClone(built.calculation);
+    const tax = saved.round as Record<string, number>;
+    assert.equal(tax.social_security_included, 14000);
+    for (const card of cards) {
+      const cardId = String(card.id);
+      const rate = PREPAYMENT_RATES_PCT[cardId];
+      const fixed = calculatePrepaymentDollars(tax.tax_before_credits, rate);
+      const stored = {
+        round_number: 5, pathway_id: pathway.id, calculated_tax: tax.final_tax_liability,
+        tax_before_credits: tax.tax_before_credits, credits_applied: tax.credits_total,
+        cards: [{ card_id: cardId, rate_pct: rate }],
+        prepayment: {
+          card_id: cardId, rate_pct: rate, prepaid_amount: fixed,
+          calculation_base: "income-tax-before-credits", tax_before_credits: tax.tax_before_credits,
+        },
+      };
+      const before = structuredClone(stored);
+      const restored = summarizePrepayment(JSON.parse(JSON.stringify(stored)));
+      assert.equal(restored?.status, "fixed");
+      assert.equal(restored?.fixed?.cardId, cardId);
+      assert.equal(restored?.fixed?.ratePct, rate);
+      assert.equal(restored?.fixed?.baseAmount, tax.tax_before_credits);
+      assert.equal(restored?.fixed?.prepaidAmount, fixed);
+      assert.equal(restored?.redrawEligible, false);
+      assert.deepEqual(summarizePrepayment(stored), restored);
+      assert.deepEqual(stored, before);
+      assert.deepEqual(built.calculation, saved, "Prepayment cannot alter saved Retirement components or tax");
+      if (pathway.id === "PATH-008" && cardId === "PRE-006") {
+        assert.equal(tax.tax_before_credits, 3391.5);
+        assert.equal(fixed, 3561);
+      }
+    }
+  }
+});
+
+test("Round 5 zero post-credit tax still fixes $368 and recovery uses the persisted basis/payment", () => {
+  const fixed = calculatePrepaymentDollars(350, PREPAYMENT_RATES_PCT["PRE-006"]);
+  assert.equal(fixed, 368);
+  const stored = {
+    round_number: 5, calculated_tax: 0, tax_before_credits: 350, credits_applied: 350,
+    cards: [{ card_id: "PRE-006", rate_pct: 105 }],
+    prepayment: {
+      card_id: "PRE-006", rate_pct: 105, prepaid_amount: fixed,
+      calculation_base: "income-tax-before-credits", tax_before_credits: 350,
+    },
+  };
+  const restored = summarizePrepayment(JSON.parse(JSON.stringify(stored)));
+  assert.equal(restored?.fixed?.prepaidAmount, 368);
+  assert.equal(restored?.fixed?.baseAmount, 350);
+  assert.equal(restored?.calculatedTax, 0);
+  const contradictory = summarizePrepayment({
+    ...stored, tax_before_credits: 99999, calculated_tax: 99999,
+  });
+  assert.deepEqual(contradictory?.fixed, restored?.fixed, "restore never recalculates a fixed payment");
+  assert.equal(advanceTarget("tax-prepayment", 5), null);
+  assert.equal(resultsAvailableForRound(5, 5), false);
+});
+
+test("Round 5 Climber decisions, physical selection, fixed recovery and closed settlement reuse shared contracts", () => {
+  const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
+  const provisional = {
+    round_number: 5, pathway_id: "PATH-001", calculated_tax: 0, tax_before_credits: 350, credits_applied: 350,
+    cards: [{ card_id: "PRE-002", rate_pct: 60 }], prepayment: null, redraw_eligible: true,
+  };
+  assert.equal(summarizePrepayment(provisional)?.status, "provisional");
+  for (const card of cards) {
+    assert.equal(canRedraw("PATH-001", PREPAYMENT_RATES_PCT[String(card.id)]), Number(card.effectValue) < 0.9);
+    for (const pathway of dataset.pathways.filter((p) => p.id !== "PATH-001")) {
+      assert.equal(canRedraw(pathway.id, PREPAYMENT_RATES_PCT[String(card.id)]), false);
+    }
+  }
+  for (const redraw of [false, true]) {
+    const stored = {
+      ...provisional,
+      cards: redraw ? [...provisional.cards, ...provisional.cards] : provisional.cards,
+      prepayment: {
+        card_id: "PRE-002", rate_pct: 60, prepaid_amount: 210,
+        calculation_base: "income-tax-before-credits", tax_before_credits: 350,
+        redraw_used: redraw, first_card_id: redraw ? "PRE-002" : null,
+      },
+    };
+    const restored = summarizePrepayment(JSON.parse(JSON.stringify(stored)));
+    assert.equal(restored?.status, "fixed");
+    assert.equal(restored?.redrawEligible, false);
+    assert.equal(restored?.fixed?.prepaidAmount, 210);
+    assert.equal(restored?.cards.length, redraw ? 2 : 1);
+    assert.equal(restored?.fixed?.redrawUsed, redraw);
+  }
+  const ui = read("../components/tax-prepayment.tsx");
+  assert.match(ui, /advanceTarget\("tax-prepayment", round\) && state.calculatedTax !== null\s+\? settlementPreview/);
+  assert.match(ui, /Results and settlement are not available yet/);
+  assert.match(ui, /physically draw another card/);
+  assert.match(ui, /keepKey.current \?\?= crypto.randomUUID\(\)/);
+  assert.doesNotMatch(ui, /Math\.random|calculatePrepaymentDollars|buildRoundTaxCalculation|calculateRetirementIncome/);
+  const restore = read("../app/api/rounds/prepayment/route.ts");
+  assert.match(restore, /supabase.rpc\("get_round_prepayment"/);
+  assert.match(restore, /summarizePrepayment\(data\)/);
+  assert.doesNotMatch(restore, /calculatePrepaymentDollars|buildRoundTaxCalculation|calculateRetirementIncome|\.update\(|\.insert\(/);
+  const keep = read("../app/api/rounds/prepayment-keep/route.ts");
+  assert.match(keep, /CARD_ENTRY_ENABLED[\s\S]*CARD_SAVE_ENABLED[\s\S]*TAX_PREPAYMENT_ENABLED/);
+  assert.doesNotMatch(keep, /body\.(rate|payment|taxBeforeCredits|incomeSources)/);
+  const dashboard = read("../components/round-dashboard.tsx");
+  assert.match(dashboard, /prepaymentFixed && resultsEnabled && advanceEnabled && target/);
+  assert.match(dashboard, /round >= 2 && round <= 5 && prepaymentFixed/);
+  for (const route of ["results", "results-finalize"]) {
+    assert.match(read(`../app/api/rounds/${route}/route.ts`), /resultsAvailableForRound\(body.round, serverMaxEnabledRound\(\)\)/);
+  }
 });

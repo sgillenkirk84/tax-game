@@ -376,3 +376,45 @@ validated version; it must not be reinstalled by this publication task.
 Round 5 Life Event, Wildcard, Deduction and Tax Calculation remain locally
 validated, not yet live/browser verified. Publication uses the normal push-triggered
 Production deployment without SQL execution, environment changes or manual deployment.
+
+## Round 5 Tax Prepayment (TASK 10.15.37)
+
+Round 5 through saved Tax Calculation is complete and live-verified in Production
+on commit `1862187fe050fdf16af8ef5015c2af17dcf9af5b`. This includes opening,
+universal Retirement (including Early Retiree and Caregiver), Life Event, Wildcard,
+Deduction and retirement-aware Tax Calculation. The Tax Calculation migration
+`20261005230000_round_five_tax_calculation.sql` was already installed successfully
+in TEST and Production. Earlier local-only verification notes above are historical.
+
+The locally implemented next segment reuses the shared physical Tax Prepayment
+card flow: saved tax -> Continue to Tax Prepayment -> select the physically drawn
+card -> save/recover its fixed payment -> stop. Every pathway uses saved Income
+Tax Before Credits times the authoritative card rate, with unchanged whole-dollar
+halves-up rounding. Credits do not reduce this basis: $350 with $350 credits and
+105% fixes $368; the saved $3,391.50 Retirement basis at 105% fixes $3,561.
+No Retirement/package, Social Security, deduction, credit or tax calculation runs
+again during Prepayment. All ten rates and Corporate Climber's current-round
+keep/redraw decision remain unchanged. Restore consumes the saved payment,
+rate, card and basis rather than recalculating them.
+
+`supabase/migrations/20261005240000_round_five_tax_prepayment.sql` widens only
+Tax Prepayment card recording, Deduction -> Tax Prepayment advancement, and
+Corporate Climber's keep action from Rounds 1-4 to 1-5. It preserves existing
+signatures, permissions, locks, saved-tax prerequisites and idempotency.
+The shared payment helper and recovery RPC are unchanged.
+
+Round 5 Results/finalization and final completion/My Tax Life Story stay closed.
+The fixed-payment screen does not calculate a settlement preview while Results
+is closed; Rounds 1-4 retain their existing preview. No settlement, Living Costs,
+ending cash, Round 5 ledger snapshot or final Audit resolution is applied.
+Round 6 stays unavailable, rollout defaults/limits and feature flags are unchanged,
+and finalized Rounds 1-4 are not rewritten. This local task performs no SQL,
+commit, push, deployment or environment change. Round 5 Tax Prepayment has not
+yet been live-verified.
+
+TASK 10.15.38 publication history: the user manually installed
+`20261005240000_round_five_tax_prepayment.sql` successfully in both TEST and
+Production before publication. Publication records the exact validated migration
+without reinstallation, SQL execution, environment changes or manual deployment.
+Round 5 Tax Prepayment remains locally validated, not yet browser/live-verified;
+Results/finalization and final completion/My Tax Life Story remain closed.

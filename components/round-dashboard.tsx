@@ -213,7 +213,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                         {advanceError}
                       </p>
                     ) : null}
-                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round <= 4)) ? (
+                    {target && advanceEnabled && (step.id !== "deduction" || (taxCalculated && prepaymentEnabled && round <= 5)) ? (
                       <button
                         type="button"
                         onClick={() => void advance()}
@@ -235,7 +235,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                     )}
                   </div>
                 ) : null}
-                {step.id === "tax-prepayment" && round >= 2 && round <= 4 && prepaymentFixed && (!target || !resultsEnabled || !advanceEnabled) ? (
+                {step.id === "tax-prepayment" && round >= 2 && round <= 5 && prepaymentFixed && (!target || !resultsEnabled || !advanceEnabled) ? (
                   <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
                     Your Round {round} Tax Prepayment is saved. Results and Life Ledger are coming next.
                   </p>

@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
+import { advanceTarget } from "@/lib/round-stages";
 import { type PrepaymentState, REDRAW_THRESHOLD_PCT, settlementPreview } from "@/lib/tax-prepayment";
 
 type TaxPrepaymentProps = {
@@ -19,7 +20,7 @@ const money = (value: number) =>
 // Tax Prepayment: the student selects the physical card they drew. The server
 // fixes the prepaid amount from saved income tax before credits and the card's rate,
 // so the browser never supplies an amount. Nothing here changes cash or settles
-// tax; the refund or amount due is a derived preview shown only once final.
+// tax; a derived settlement preview is shown only when payment is fixed and Results is available.
 export default function TaxPrepayment({ round, player, pathwayId, onFixedChange }: TaxPrepaymentProps) {
   const [state, setState] = useState<PrepaymentState | null>(null);
   const [details, setDetails] = useState<Details>({});
@@ -121,7 +122,9 @@ export default function TaxPrepayment({ round, player, pathwayId, onFixedChange 
     const finalCard = details[state.fixed.cardId];
     const firstCard = state.fixed.firstCardId ? details[state.fixed.firstCardId] : null;
     const preview =
-      state.calculatedTax === null ? null : settlementPreview(state.calculatedTax, state.fixed.prepaidAmount);
+      advanceTarget("tax-prepayment", round) && state.calculatedTax !== null
+        ? settlementPreview(state.calculatedTax, state.fixed.prepaidAmount)
+        : null;
     return (
       <section className="mt-2 rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-5">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-gold)]">
@@ -182,8 +185,9 @@ export default function TaxPrepayment({ round, player, pathwayId, onFixedChange 
           </div>
         ) : null}
         <p className="mt-3 text-sm text-[var(--brand-navy)]/75">
-          Your prepaid amount is now locked in. This is a preview only: your cash has not changed and nothing
-          has been paid or collected yet.
+          {preview
+            ? "Your prepaid amount is now locked in. This is a preview only: your cash has not changed and nothing has been paid or collected yet."
+            : "Your prepaid amount is now locked in. Results and settlement are not available yet; your cash has not changed."}
         </p>
         {estimatedNote}
       </section>

@@ -235,7 +235,7 @@ test("Round 3 physical Income and supported stages reuse existing card rules", (
   assert.doesNotMatch(entry, /Math\.random/);
 });
 
-test("Round 4 can advance through shared Results but Round 5 stays closed", () => {
+test("Round 4 can advance through shared Results but Round 5 Results stays closed", () => {
   assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
@@ -248,10 +248,10 @@ test("Round 4 can advance through shared Results but Round 5 stays closed", () =
   assert.match(prepaymentMigration, /when 'deduction' then\n      if life_row\.current_round between 1 and 3 then/);
   const resultsMigration = read("../supabase/migrations/20261005170000_round_three_results.sql");
   assert.match(resultsMigration, /if life_row\.current_round not between 1 and 3 then/);
-  assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 4/);
+  assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 5/);
   assert.match(read("./round-results.ts"), /round <= 4 && round <= maxEnabledRound/);
   const dashboard = read("../components/round-dashboard.tsx");
-  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 4/);
+  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 5/);
 });
 
 test("Tax Prepayment, Results and Audit are untouched by this migration", () => {
@@ -323,9 +323,9 @@ test("Round 4 opens shared card stages through Deduction and keeps all regular-l
     assert.equal(advanceTarget("deduction", 4)?.stage, "tax-prepayment");
     assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
     for (const stage of CARD_STAGES) {
-      assert.equal(isRoundCardStageAvailable(stage, 5), ["income-or-retirement", "life-event", "wildcard", "deduction"].includes(stage));
+      assert.equal(isRoundCardStageAvailable(stage, 5), stage !== "audit-if-triggered");
       assert.equal(advanceTarget(stage, 5)?.stage ?? null,
-        stage === "income-or-retirement" ? "life-event" : stage === "life-event" ? "wildcard" : stage === "wildcard" ? "deduction" : null);
+        stage === "income-or-retirement" ? "life-event" : stage === "life-event" ? "wildcard" : stage === "wildcard" ? "deduction" : stage === "deduction" ? "tax-prepayment" : null);
     }
   }
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-008", 4), /Physically shuffle the Retirement deck/);
@@ -600,6 +600,40 @@ test("Round 4 migrations patch only authorized gates in the cumulative installed
   assert.match(schema, /activation_round between 1 and 6/);
   assert.match(schema, /GAME_ROUND_FINALIZED/);
   assert.match(schema, /GAME_LEDGER_IMMUTABLE/);
+  const beforeFifthPrepayment = new Map(definitions);
+  const fifthPrepaymentSql = patch("20261005240000_round_five_tax_prepayment.sql", 3);
+  assert.equal(definitions.get(recordKey), beforeFifthPrepayment.get(recordKey)!.replace(
+    "when life_row.current_round not between 1 and 4 then 0", "when life_row.current_round not between 1 and 5 then 0"));
+  assert.equal(definitions.get(advanceKey), beforeFifthPrepayment.get(advanceKey)!.replace(
+    "when 'deduction' then\n      if life_row.current_round between 1 and 4 then",
+    "when 'deduction' then\n      if life_row.current_round between 1 and 5 then"));
+  assert.equal(definitions.get(keepKey), beforeFifthPrepayment.get(keepKey)!.replace(
+    "if life_row.current_round not between 1 and 4 then", "if life_row.current_round not between 1 and 5 then"));
+  for (const [key, source] of beforeFifthPrepayment) {
+    if (![recordKey, advanceKey, keepKey].includes(key)) assert.equal(definitions.get(key), source, key);
+  }
+  const finalAdvance = definitions.get(advanceKey)!;
+  assert.match(finalAdvance, /when 'tax-prepayment' then\s+if life_row.current_round between 1 and 4 then/);
+  assert.match(finalAdvance, /p_from_stage = 'deduction'[\s\S]*TAX_CALCULATION_REQUIRED/);
+  for (const key of [recordKey, advanceKey, keepKey]) {
+    const source = definitions.get(key)!;
+    assert.match(source, /PLAYER_SETUP_NOT_AVAILABLE/);
+    assert.match(source, /NOT_CURRENT_STAGE/);
+    assert.match(source, /for update/);
+    assert.match(source, /IDEMPOTENCY_KEY_REUSED/);
+  }
+  const finalRecord = definitions.get(recordKey)!;
+  assert.match(finalRecord, /catalog_row\.prepayment_rate_pct/);
+  assert.match(finalRecord, /PREPAYMENT_ALREADY_FIXED/);
+  assert.match(finalRecord, /first_rate >= 90/);
+  assert.match(finalRecord, /p_choice is distinct from 'redraw'/);
+  assert.match(finalRecord, /perform public\.mm_fix_round_prepayment/);
+  assert.ok(finalRecord.indexOf("if found then") < finalRecord.indexOf("insert into public.mm_game_card_history"));
+  assert.match(definitions.get(keepKey)!, /public\.mm_fix_round_prepayment/);
+  assert.match(fifthPrepaymentSql, /fn.prosecdef/);
+  assert.match(fifthPrepaymentSql, /search_path=pg_catalog/);
+  assert.match(fifthPrepaymentSql, /old_count <> 1/);
+  assert.doesNotMatch(fifthPrepaymentSql, /alter table|update public\.|insert into public\.|mm_fix_round_prepayment|finalize_round_results|rate_pct/);
 });
 
 test("Round 4 API/UI restore and card entry reuse authoritative IDs, retry keys and stage guards without random draws", () => {
@@ -712,21 +746,21 @@ test("Round 5 physical Retirement-card IDs restore authoritative components with
   assert.deepEqual(workbookData, original);
 });
 
-test("Round 5 opens shared stages through Deduction/tax only; Prepayment and finalization stay closed", () => {
+test("Round 5 opens shared stages through fixed Tax Prepayment only; finalization and Round 6 stay closed", () => {
   for (const pathway of workbookData.pathways) {
     for (const stage of CARD_STAGES) {
-      const opening = ["income-or-retirement", "life-event", "wildcard", "deduction"].includes(stage);
+      const opening = stage !== "audit-if-triggered";
       assert.equal(isRoundCardStageAvailable(stage, 5), opening);
       assert.deepEqual(stageCardRules(stage, pathway.id, 5), opening ? { min: 1, max: 1 } : { min: 0, max: 0 });
       assert.equal(advanceTarget(stage, 5)?.stage ?? null,
-        stage === "income-or-retirement" ? "life-event" : stage === "life-event" ? "wildcard" : stage === "wildcard" ? "deduction" : null);
+        stage === "income-or-retirement" ? "life-event" : stage === "life-event" ? "wildcard" : stage === "wildcard" ? "deduction" : stage === "deduction" ? "tax-prepayment" : null);
       assert.equal(isRoundCardStageAvailable(stage, 6), false);
     }
   }
   assert.equal(resultsAvailableForRound(5, 5), false);
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
   for (const route of ["prepayment", "prepayment-keep"]) {
-    assert.match(read(`../app/api/rounds/${route}/route.ts`), /!serverRoundEnabled\(body.round\) \|\| body.round > 4/);
+    assert.match(read(`../app/api/rounds/${route}/route.ts`), /!serverRoundEnabled\(body.round\) \|\| body.round > 5/);
   }
   for (const route of ["tax-calculate", "tax-result"]) {
     assert.match(read(`../app/api/rounds/${route}/route.ts`), /!serverRoundEnabled\(body.round\) \|\| body.round > 5/);
@@ -737,7 +771,7 @@ test("Round 5 opens shared stages through Deduction/tax only; Prepayment and fin
   const dashboard = read("../components/round-dashboard.tsx");
   assert.match(dashboard, /target && advanceEnabled/);
   assert.match(dashboard, /step.id === "deduction" && round >= 1 && round <= 5/);
-  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 4/);
+  assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 5/);
   assert.match(dashboard, /Your Round \{round\} tax return is saved. Tax Prepayment is not available yet/);
   assert.match(dashboard, /Your teacher will let you know when the next step opens/);
   const schema = read("../supabase/migrations/20261003200000_replayable_game_schema.sql");

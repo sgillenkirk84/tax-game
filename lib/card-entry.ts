@@ -70,7 +70,7 @@ export type StageCardRules = { min: number; max: number };
 
 export function isRoundCardStageAvailable(stage: CardStage, round: number): boolean {
   return Number.isInteger(round) && round >= 1
-    && (round <= 4 || (round === 5 && stage === "income-or-retirement"))
+    && (round <= 4 || (round === 5 && ["income-or-retirement", "life-event", "wildcard", "deduction"].includes(stage)))
     && stage !== "audit-if-triggered";
 }
 

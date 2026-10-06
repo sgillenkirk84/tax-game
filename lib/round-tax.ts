@@ -5,7 +5,8 @@ import { getRoundIncomeCardCategory } from "./round-income.ts";
 import type { GameCard, GameDataset } from "./game-data/types";
 import {
   calculateGameTax,
-  calculateEarlyRetirementIncome,
+  calculateRetirementIncome,
+  type EarlyRetirementIncomeResult,
   selectWorkbookDeduction,
   type ActiveDependent,
   type FilingStatusCode,
@@ -32,6 +33,7 @@ export type RoundTaxSnapshot = {
     student_loan_debt: number;
     // Corporate Climber's retained primary Income card; card id only, amounts come from game data.
     corporate_climber_primary?: { card_id: string; established_round: number } | null;
+    previous_retirement_package?: EarlyRetirementIncomeResult | null;
   };
   round: {
     id: string;
@@ -117,8 +119,8 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   if (life.status !== "in_progress" || round.status !== "in_progress") {
     return fail("ROUND_NOT_OPEN", "This round is not open for calculation.");
   }
-  if (round.round_number < 1 || round.round_number > 4 || life.current_round !== round.round_number) {
-    return fail("ROUND_NOT_SUPPORTED", "Tax calculation is only available for Rounds 1 to 4.");
+  if (round.round_number < 1 || round.round_number > 5 || life.current_round !== round.round_number) {
+    return fail("ROUND_NOT_SUPPORTED", "Tax calculation is only available for Rounds 1 to 5.");
   }
   if (life.tax_year !== 2025) {
     return fail("TAX_YEAR_NOT_SUPPORTED", "Only Tax Year 2025 is supported.");
@@ -132,11 +134,11 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
 
   // Income cards per pathway: Side Hustler exactly two; Entrepreneur one plus an optional
   // second that must be Business Income; every other pathway exactly one.
-  const incomeRange =
-    life.pathway_id === "PATH-006" ? { min: 2, max: 2 } : life.pathway_id === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
+  const incomeDeck = getRoundIncomeCardCategory(life.pathway_id, round.round_number);
+  const incomeRange = incomeDeck === "Retirement" ? { min: 1, max: 1 }
+    : life.pathway_id === "PATH-006" ? { min: 2, max: 2 } : life.pathway_id === "PATH-002" ? { min: 1, max: 2 } : { min: 1, max: 1 };
   const historyIds: Record<string, string[]> = {};
   const cardsByStage: Record<string, RoundTaxSnapshot["cards"][number]> = {};
-  const incomeDeck = getRoundIncomeCardCategory(life.pathway_id, round.round_number);
   for (const [stage, defaultDeck] of STAGES) {
     const deck = stage === "income-or-retirement" ? incomeDeck : defaultDeck;
     const saved = snapshot.cards
@@ -169,10 +171,16 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   // Income sources. Opening cash and debt are deliberately not read as income or deductions.
   // Each Income card is its own source; all of them contribute to the calculation.
   const sources: IncomeSource[] = [];
+  if (incomeDeck === "Retirement" && life.pathway_id === "PATH-008"
+    && round.round_number === 5 && !life.previous_retirement_package) {
+    return fail("RETIREMENT_PACKAGE_MISSING", "Early Retiree requires its saved finalized Round 4 retirement package.");
+  }
   const retirement = incomeDeck === "Retirement"
-    ? calculateEarlyRetirementIncome({
+    ? calculateRetirementIncome({
+        pathwayId: life.pathway_id,
         roundNumber: round.round_number,
         retirementCardId: incomeEntries[0].card_id,
+        ...(life.previous_retirement_package ? { previousRound: life.previous_retirement_package } : {}),
       })
     : null;
   if (retirement) sources.push(...retirement.incomeSources.map((source) => ({ ...source })));
@@ -191,7 +199,7 @@ export function buildRoundTaxCalculation(snapshot: RoundTaxSnapshot): RoundTaxSu
   // Corporate Climber: one primary income that never decreases. The higher dollar amount of
   // this round's card and the retained card wins; the winner keeps its own tax classification.
   let persistentUpdates: Record<string, unknown> | null = null;
-  if (life.pathway_id === "PATH-001") {
+  if (life.pathway_id === "PATH-001" && !retirement) {
     const drawn = findCard(incomeEntries[0].card_id)!;
     const prior = life.corporate_climber_primary ?? null;
     if (round.round_number > 1 && !prior) {

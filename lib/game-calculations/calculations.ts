@@ -546,6 +546,39 @@ export function calculateEarlyRetirementIncome(
     }
   }
 
+  return calculateProtectedRetirementPackage(input, rules.earlyRetirementPathwayId, dataset);
+}
+
+export function calculateRetirementIncome(
+  input: {
+    pathwayId: string;
+    roundNumber: number;
+    retirementCardId: string;
+    previousRound?: EarlyRetirementIncomeResult;
+  },
+  dataset: GameDataset = GAME_DATA
+): EarlyRetirementIncomeResult {
+  const startRound = getRetirementStartRound(input.pathwayId, dataset);
+  if (input.pathwayId === dataset.gameRules.approved.retirement.earlyRetirementPathwayId) {
+    return calculateEarlyRetirementIncome(input, dataset);
+  }
+  if (input.roundNumber !== startRound || input.previousRound) {
+    throw new Error("A newly retired pathway requires its first retirement round without a prior retirement package.");
+  }
+  return calculateProtectedRetirementPackage(input, input.pathwayId, dataset);
+}
+
+function calculateProtectedRetirementPackage(
+  input: {
+    roundNumber: number;
+    retirementCardId: string;
+    previousRound?: EarlyRetirementIncomeResult;
+    additionalInvestmentIncome?: AdditionalRetirementInvestmentIncome[];
+  },
+  pathwayId: string,
+  dataset: GameDataset
+): EarlyRetirementIncomeResult {
+  const rules = dataset.gameRules.approved.retirement;
   const card = getRetirementCard(input.retirementCardId, dataset);
   const guarantee = rules.earlyRetirementIncomeGuarantee;
   const guaranteeCents = nonNegativeMoney(guarantee.annualAmount, "Early Retiree income guarantee");
@@ -573,12 +606,12 @@ export function calculateEarlyRetirementIncome(
     {
       category: "social-security",
       amount: guarantee.socialSecurity,
-      sourceId: rules.earlyRetirementPathwayId,
+      sourceId: pathwayId,
     },
     {
       category: "retirement-or-investment-income",
       amount: guarantee.pensionAndInvestment,
-      sourceId: rules.earlyRetirementPathwayId,
+      sourceId: pathwayId,
     },
   ];
 
@@ -608,7 +641,7 @@ export function calculateEarlyRetirementIncome(
   const totalAnnualIncome = fromCents(totalAnnualIncomeCents);
   const incomeSources = [...retirementIncomeSources, ...additionalInvestmentIncome];
   return {
-    pathwayId: rules.earlyRetirementPathwayId,
+    pathwayId,
     roundNumber: input.roundNumber,
     annualPackageAmount: packageAmount,
     totalAnnualIncome,

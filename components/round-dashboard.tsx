@@ -144,7 +144,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
               <li key={step.id} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-green-800">Completed · {label}</p>
                 {step.kind === "automatic" ? (
-                  round >= 1 && round <= 4 ? (
+                  round >= 1 && round <= 5 ? (
                     <TaxCalculation round={round} player={player} readOnly />
                   ) : (
                     <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Calculated automatically.</p>
@@ -207,7 +207,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                 ) : null}
                 {currentSaved && isCardStage(step.id) && step.id !== "tax-prepayment" ? (
                   <div className="mt-4">
-                    {step.id === "deduction" && round >= 1 && round <= 4 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
+                    {step.id === "deduction" && round >= 1 && round <= 5 ? <TaxCalculation round={round} player={player} onCalculatedChange={setTaxCalculated} /> : null}
                     {advanceError ? (
                       <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">
                         {advanceError}

@@ -302,7 +302,8 @@ The migration has not been executed; no environment values change.
 The Round 4 Results migration was manually installed successfully in TEST and
 Production. The live Production game finalized Round 4, saved its Life Ledger
 state, and reached the ready-for-Round-5 boundary. Round 4 is now complete.
-Round 5 gameplay has not yet been enabled or live-verified.
+At TASK 10.15.33, Round 5 gameplay had not yet been enabled or live-verified.
+Its subsequent opening verification is recorded below.
 
 This locally implemented opening reuses the shared next-round/recovery RPC and
 card-entry flow. Every pathway draws one physical card from the Retirement deck
@@ -328,3 +329,50 @@ Explicit lower values remain respected. A later authorized rollout must set
 **both** `NEXT_PUBLIC_MAX_ENABLED_ROUND=5` and `MAX_ENABLED_ROUND=5`, after migration
 installation and publication. This task changes neither environment variable,
 executes no SQL, and does not commit, push or deploy.
+
+## Round 5 through saved Tax Calculation (TASK 10.15.35)
+
+Round 4 is complete and live-verified. The Round 5 opening migration was installed
+successfully in TEST and Production, both round-limit rollout settings were
+enabled, and Round 5 opened successfully in Production. Early Retiree and Caregiver
+both received Retirement cards, validating continuing and newly entering retirement.
+Round 5 Life Event through Tax Calculation are locally implemented/validated,
+not yet live-verified.
+
+The shared stage flow now allows Retirement -> Life Event -> Wildcard -> Deduction
+-> saved Tax Calculation. All pathways use one authoritative Retirement card.
+The shared protected-package calculation is reused without changing its arithmetic,
+guarantee or Social Security rules. Newly retired pathways use the higher complete
+card-or-$42,000 package; Early Retiree also retains its existing protected Round 4
+winner through the existing helper's Round 5 rule. That prior package is read from
+the immutable finalized Round 4 input snapshot, never recalculated.
+
+Original Retirement components and the winning package remain separately saved.
+Corporate Climber's working-income replacement, Entrepreneur's extra Business
+card and Side Hustler's two-Income-card requirement do not apply to Retirement.
+Shared household/Caregiver/homeowner, Wildcard, deduction and Tax Year 2025 rules
+remain unchanged. Existing investments contribute recurring income once; new
+Round 5 investments retain next-round activation metadata (6), but no Round 6
+gameplay or post-game income is created. The schema already permits activation 6.
+Audit triggers remain recorded and unassessed for the later beta Results milestone.
+
+`supabase/migrations/20261005230000_round_five_tax_calculation.sql` extends the
+three card-recording gates, three transitions through Deduction, and tax-save
+authorization through 5. It also makes advancement/tax card counts and Climber
+persistence deck-aware, and extends the authenticated tax-input reader with the
+saved Early Retiree prior package. Existing signatures, restricted grants, locks,
+idempotency and finalized history are preserved. No schema or history rewrite occurs.
+
+After saved Tax Calculation, Round 5 stops. Tax Prepayment, Results/Life Ledger,
+final completion and My Tax Life Story remain closed in application/database code.
+Hard maximum 5, unset/empty default 4, and both rollout gates are unchanged.
+This task executes no SQL and changes no environment variables; no commit,
+push or deployment is performed.
+
+TASK 10.15.36 publication history: the user manually installed
+`20261005230000_round_five_tax_calculation.sql` successfully in both TEST and
+Production before publication. The committed migration records that exact
+validated version; it must not be reinstalled by this publication task.
+Round 5 Life Event, Wildcard, Deduction and Tax Calculation remain locally
+validated, not yet live/browser verified. Publication uses the normal push-triggered
+Production deployment without SQL execution, environment changes or manual deployment.

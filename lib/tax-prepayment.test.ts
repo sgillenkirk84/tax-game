@@ -380,13 +380,14 @@ test("Round 4 Retirement saved tax feeds every shared physical prepayment rate w
   assert.doesNotMatch(helper, /calculateEarlyRetirementIncome|income_components|gross_income|adjusted_gross_income|taxable_income/);
 });
 
-test("Round 4 fixed payment restores as stored and enables shared Results; Round 5 stops at Prepayment", () => {
+test("Round 4 fixed payment restores as stored; Round 5 enables shared Results only within the rollout limit", () => {
   assert.equal(advanceTarget("deduction", 4)?.stage, "tax-prepayment");
   assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
   assert.equal(resultsAvailableForRound(4, 4), true);
-  assert.equal(resultsAvailableForRound(5, 5), false);
+  assert.equal(resultsAvailableForRound(5, 4), false);
+  assert.equal(resultsAvailableForRound(5, 5), true);
   assert.equal(advanceTarget("deduction", 5)?.stage, "tax-prepayment");
-  assert.equal(advanceTarget("tax-prepayment", 5), null);
+  assert.equal(advanceTarget("tax-prepayment", 5)?.stage, "results-and-life-ledger");
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-008", 5), { min: 1, max: 1 });
   const stored = {
     pathway_id: "PATH-001", round_number: 4, calculated_tax: 0, tax_before_credits: 350, credits_applied: 350,
@@ -591,11 +592,11 @@ test("Round 5 zero post-credit tax still fixes $368 and recovery uses the persis
     ...stored, tax_before_credits: 99999, calculated_tax: 99999,
   });
   assert.deepEqual(contradictory?.fixed, restored?.fixed, "restore never recalculates a fixed payment");
-  assert.equal(advanceTarget("tax-prepayment", 5), null);
-  assert.equal(resultsAvailableForRound(5, 5), false);
+  assert.equal(advanceTarget("tax-prepayment", 5)?.stage, "results-and-life-ledger");
+  assert.equal(resultsAvailableForRound(5, 5), true);
 });
 
-test("Round 5 Climber decisions, physical selection, fixed recovery and closed settlement reuse shared contracts", () => {
+test("Round 5 Climber decisions, physical selection, fixed recovery and enabled settlement preview reuse shared contracts", () => {
   const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
   const provisional = {
     round_number: 5, pathway_id: "PATH-001", calculated_tax: 0, tax_before_credits: 350, credits_applied: 350,

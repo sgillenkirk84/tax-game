@@ -418,3 +418,52 @@ Production before publication. Publication records the exact validated migration
 without reinstallation, SQL execution, environment changes or manual deployment.
 Round 5 Tax Prepayment remains locally validated, not yet browser/live-verified;
 Results/finalization and final completion/My Tax Life Story remain closed.
+
+## Round 5 Results and final Life Ledger (TASK 10.15.39)
+
+Round 4 is complete and live-verified. Round 5 opening, universal Retirement,
+Life Event, Wildcard, Deduction, retirement-aware Tax Calculation and Tax
+Prepayment are now live-verified in Production. Tax Prepayment is published on
+commit `808ed16408fd56e59abf6354aa662f18619f801c`; its migration
+`20261005240000_round_five_tax_prepayment.sql` was already installed successfully
+in TEST and Production. Earlier local-only notes above are historical.
+
+The next locally implemented segment reuses the shared Results APIs,
+`computeRoundResults`, atomic `finalize_round_results` and immutable `{round, cards}`
+ledger snapshot: fixed Round 5 Tax Prepayment -> Results -> shared settlement,
+AGI-based Living Costs and applicable financial effects -> ending state -> saved
+Round 5 snapshot -> fifth Life Ledger column -> stop. Saved final Calculated Tax
+and fixed Tax Prepayment are consumed, not recomputed. A $0 final tax with $368
+prepaid refunds $368; $3,391.50 final tax with $3,561 prepaid refunds $169.50.
+Retirement, Social Security, protected packages, deductions and credits are not
+rerun. Debt, household, permanent Caregiver dependent, homeowner, assets and
+effect lifecycle retain their shared behavior. Investment income is not added
+again and activation-round-6 metadata does not apply future income or gameplay.
+Audit remains unresolved `bypassed-beta`, with zero adjustment and penalty.
+
+`supabase/migrations/20261005250000_round_five_results.sql` widens only
+Tax Prepayment -> Results advancement and Results finalization from Rounds 1-4
+to 1-5. It preserves all financial logic, snapshot structure, permissions,
+credentials, locking and idempotency. No schema change or backfill is required.
+Retries and refresh return saved Results instead of applying effects again;
+finalized Rounds 1-4 remain immutable.
+
+As explicitly approved, the saved finalized Round 5 snapshot is the deterministic
+five-round financial-game completion boundary. The UI confirms that Results and
+Life Ledger are saved and that there is no next round. Database life status
+remains unchanged; this is not a new database `completed` lifecycle transition.
+Existing hard maximum 5, configured rollout limits and feature flags remain in
+force. My Tax Life Story, AI generation and Round 6 are not implemented/enabled.
+Round 5 Results and full five-round financial completion are locally validated,
+not yet live-verified. This task executes no SQL and performs no commit, push,
+deployment or environment change.
+
+TASK 10.15.40 publication history: the user manually installed
+`20261005250000_round_five_results.sql` successfully in both TEST and Production
+before publication. Publication records the exact validated migration already
+installed; no SQL execution, reinstallation, Supabase modification, environment
+change or manual deployment is performed. Round 5 Results/final Life Ledger
+and full five-round financial completion remain locally validated, not yet
+browser/live-verified. Finalized Round 5 remains the application completion
+boundary with database life status unchanged. My Tax Life Story remains
+unimplemented and Round 6 remains unavailable.

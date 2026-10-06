@@ -303,7 +303,12 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
         ))}
       </Section>
       <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
-      {nextEnabled ? (
+      {results.roundNumber === MAX_PLAYABLE_ROUND ? (
+        <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+          Your five-round financial game is complete. All five rounds of Results and your Life Ledger
+          are saved. There is no next round. My Tax Life Story is not available yet.
+        </p>
+      ) : nextEnabled ? (
         <div className="mt-4">
           <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
             Round {results.roundNumber} is complete.

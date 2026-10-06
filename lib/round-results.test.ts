@@ -19,7 +19,7 @@ const base = {
 // Living costs at AGI $60,000: 30,000x85% + 20,000x55% + 10,000x45% = 25,500 + 11,000 + 4,500.
 const LIVING_60K = 41000;
 
-test("Rounds 1-4 offer shared Results within the configured limit; Round 5 remains closed", () => {
+test("Rounds 1-5 offer shared Results within the configured limit; Round 6 remains closed", () => {
   assert.deepEqual(advanceTarget("tax-prepayment", 2), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.equal(resultsAvailableForRound(2, 1), false);
   assert.equal(resultsAvailableForRound(2, 2), true);
@@ -28,10 +28,16 @@ test("Rounds 1-4 offer shared Results within the configured limit; Round 5 remai
   assert.equal(resultsAvailableForRound(3, 3), true);
   assert.equal(resultsAvailableForRound(4, 3), false);
   assert.equal(resultsAvailableForRound(4, 4), true);
-  assert.equal(resultsAvailableForRound(5, 5), false);
+  assert.equal(resultsAvailableForRound(5, 4), false);
+  assert.equal(resultsAvailableForRound(5, 5), true);
+  assert.equal(resultsAvailableForRound(6, 6), false);
+  assert.equal(resultsAvailableForRound(0, 5), false);
+  assert.equal(resultsAvailableForRound(4.5, 5), false);
   assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
-  assert.equal(advanceTarget("tax-prepayment", 5), null);
+  assert.equal(advanceTarget("tax-prepayment", 5)?.stage, "results-and-life-ledger");
+  assert.equal(advanceTarget("tax-prepayment", 6), null);
+  assert.equal(advanceTarget("results-and-life-ledger", 5), null);
   assert.equal(advanceTarget("results-and-life-ledger", 3), null);
 });
 
@@ -59,6 +65,100 @@ function roundTwoStored(auditResolution: "not-triggered" | "bypassed-beta") {
     },
   };
 }
+
+test("Round 5 settlement consumes fixed saved payments, not a new prepayment calculation", () => {
+  for (const [finalTax, fixedPrepayment, refund] of [[0, 368, 368], [3391.5, 3561, 169.5], [5000, 3561, 0]]) {
+    const inputs = {
+      beginningCash: -50000, beginningDebt: 10000, grossIncome: 60500,
+      adjustedGrossIncome: 46500, finalTax, fixedPrepayment, pendingEffects: [],
+    };
+    const before = structuredClone(inputs);
+    const result = computeRoundResults(inputs);
+    assert.equal(result.taxPrepaid, fixedPrepayment);
+    assert.equal(result.calculatedTax, finalTax);
+    assert.equal(result.taxRefund, refund);
+    assert.equal(result.taxAmountDue, Math.max(0, finalTax - fixedPrepayment));
+    assert.equal(result.livingCosts, 34575, "unchanged progressive Living Costs use saved AGI, not Retirement gross");
+    assert.equal(result.studentLoanPayment, 4000);
+    assert.equal(result.endingDebt, 6000);
+    assert.equal(result.endingCash, -50000 + 60500 - 34575 - finalTax - 4000);
+    assert.ok(result.endingCash < 0);
+    assert.equal(result.auditPenalty, 0);
+    assert.deepEqual(computeRoundResults(inputs), result);
+    assert.deepEqual(inputs, before);
+  }
+});
+
+test("Final Round 5 restores identical snapshots and all five ledger columns without rewriting earlier rounds", async () => {
+  const snapshots = [1, 2, 3, 4, 5].map((round_number) => ({
+    ...roundTwoStored("bypassed-beta"), round_number,
+  }));
+  snapshots[4].cards.unshift({ stage: "income-or-retirement", card_id: "RET-MIX-003" });
+  snapshots[4].results.investment_income = 500;
+  snapshots[4].results.investment_asset_value = 20000;
+  const before = structuredClone(snapshots);
+  const summaries = snapshots.map((saved) => summarizeStoredResults(saved)!);
+  const final = summarizeStoredResults(JSON.parse(JSON.stringify(snapshots[4])))!;
+  assert.equal(final.roundNumber, 5);
+  assert.equal(final.calculatedTax, 0);
+  assert.equal(final.taxPrepaid, 368);
+  assert.equal(final.taxRefund, 368);
+  assert.equal(final.filingStatus, "MFJ");
+  assert.equal(final.homeowner, true);
+  assert.equal(final.activeDependents, 2);
+  assert.equal(final.details?.investmentIncome, 500);
+  assert.equal(final.details?.investmentAssetValue, 20000);
+  assert.equal(final.details?.auditResolution, "bypassed-beta");
+  assert.equal(final.details?.auditPenalty, 0);
+  assert.deepEqual(final, summaries[4]);
+  const calls: number[] = [];
+  const request: typeof fetch = async (url, init) => {
+    assert.equal(url, "/api/rounds/results");
+    const { round } = JSON.parse(String(init?.body));
+    calls.push(round);
+    return Response.json({ finalized: true, results: summaries[round - 1] });
+  };
+  const player = { id: "player", resumeToken: "token" };
+  const signal = new AbortController().signal;
+  const history = await loadEarlierLedgerRounds(player, 5, signal, request);
+  assert.deepEqual(calls, [1, 2, 3, 4]);
+  const rows = lifeLedgerRows([...history, final]);
+  assert.deepEqual(rows, lifeLedgerRows(summaries));
+  const priorRows = lifeLedgerRows(summaries.slice(0, 4));
+  for (const row of rows) {
+    assert.equal(row.values.length, 5);
+    assert.deepEqual(row.values.slice(0, 4), priorRows.find((prior) => prior.label === row.label)!.values.slice(0, 4));
+  }
+  assert.equal(rows.find((row) => row.label === "Tax refund")!.values[4], "$368");
+  assert.equal(rows.find((row) => row.label === "Investment income")!.values[4], "$500");
+  assert.deepEqual(lifeLedgerRows([...await loadEarlierLedgerRounds(player, 5, signal, request), final]), rows);
+  assert.deepEqual(snapshots, before);
+});
+
+test("Round 5 completion is displayed only after saved Results, with no next round or story/AI action", () => {
+  const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
+  const ui = read("../components/round-results.tsx");
+  assert.match(ui, /if \(!results\)/);
+  assert.ok(ui.indexOf("if (!results)") < ui.indexOf("results.roundNumber === MAX_PLAYABLE_ROUND"));
+  assert.match(ui, /if \(body.finalized && body.results\)/);
+  assert.match(ui, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*five-round financial game is complete[\s\S]*There is no next round/);
+  assert.match(ui, /My Tax Life Story is not available yet/);
+  assert.match(ui, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
+  assert.match(ui, /getRoundIncomeCardCategory\(results.pathwayId, results.roundNumber\)/);
+  assert.doesNotMatch(ui, /\/api\/.*(?:story|ai)|generateStory|calculateRetirementIncome|calculatePrepaymentDollars/);
+  const finalize = read("../app/api/rounds/results-finalize/route.ts");
+  assert.match(finalize, /if \(!inputs\)[\s\S]*status: 409/);
+  assert.match(finalize, /finalTax: num\(inputs.final_tax_liability\)/);
+  assert.match(finalize, /fixedPrepayment: num\(inputs.fixed_tax_prepayment\)/);
+  assert.ok(finalize.indexOf("if (current?.finalized)") < finalize.indexOf("computeRoundResults({"));
+  assert.doesNotMatch(finalize, /calculateRetirementIncome|calculateEarlyRetirementIncome|buildRoundTaxCalculation|calculatePrepaymentDollars|generateStory/);
+  const recovery = read("../supabase/migrations/20261004090000_round_results.sql").split("create or replace function public.get_round_results(")[1];
+  assert.match(recovery, /round_row.status = 'finalized'[\s\S]*round_row.calculation_details -> 'results'/);
+  assert.match(recovery, /tax_prepayment' is null/);
+  assert.doesNotMatch(recovery, /update public\.|insert into public\./);
+  assert.match(read("../app/api/rounds/next-round/route.ts"), /body.round < 2 \|\| body.round > MAX_PLAYABLE_ROUND/);
+  assert.match(read("./round-rules.ts"), /MAX_PLAYABLE_ROUND = 5/);
+});
 
 test("Life Ledger aligns saved rounds by number without recalculation or mutation", () => {
   const second = summarizeStoredResults(roundTwoStored("bypassed-beta"))!;

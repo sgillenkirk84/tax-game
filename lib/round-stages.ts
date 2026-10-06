@@ -51,7 +51,7 @@ export function advanceTarget(
   if (round >= 1 && round <= 5 && stage === "deduction") {
     return { stage: "tax-prepayment", label: "Tax Prepayment" };
   }
-  if (round >= 1 && round <= 4 && stage === "tax-prepayment") {
+  if (round >= 1 && round <= 5 && stage === "tax-prepayment") {
     return { stage: "results-and-life-ledger", label: "Results and Life Ledger" };
   }
   return null;

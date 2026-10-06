@@ -597,13 +597,17 @@ test("Round 4 tax rejects wrong card sources, incomplete stages and unsupported 
   assert.equal(fifth.code, "ROUND_NOT_SUPPORTED");
 });
 
-for (const pathway of workbookData.pathways) {
-  test(`Round 4 ${pathway.id} Results consume saved tax/payment without reapplying household, investments or lifecycle effects`, () => {
+for (const { round, pathway } of [4, 5].flatMap((round) => workbookData.pathways.map((pathway) => ({ round, pathway })))) {
+  test(`Round ${round} ${pathway.id} Results consume saved tax/payment without reapplying household, investments or lifecycle effects`, () => {
+    const retirement = round === 5 || pathway.id === "PATH-008";
     const input = snapshot({
-      round: 4, pathway: pathway.id, filing: "MFJ", lifeCard: "LIFE-001",
-      income: pathway.id === "PATH-008" ? ["RET-MIX-003"]
+      round, pathway: pathway.id, filing: "MFJ", lifeCard: "LIFE-001",
+      income: retirement ? ["RET-MIX-003"]
         : ["PATH-002", "PATH-006"].includes(pathway.id) ? ["INC-W2-004", "INC-BIZ-002"] : ["INC-W2-004"],
     });
+    if (round === 5 && pathway.id === "PATH-008") {
+      input.life.previous_retirement_package = calculateEarlyRetirementIncome({ roundNumber: 4, retirementCardId: "RET-MIX-003" });
+    }
     input.life.homeowner = true;
     input.round.beginning_cash_resources = -20000;
     input.round.beginning_student_loan_debt = 10000;
@@ -612,16 +616,20 @@ for (const pathway of workbookData.pathways) {
       source_type: "card-history", source_card_id: "WILD-007", acquired_round: 3,
       activation_round: 4, recurring_income_per_round: 500, asset_value: 10000, status: "active",
     }];
+    if (round === 5) input.investments.push({
+      source_type: "card-history", source_card_id: "WILD-007", acquired_round: 5,
+      activation_round: 6, recurring_income_per_round: 500, asset_value: 10000, status: "active",
+    });
     if (pathway.id === "PATH-001") input.life.corporate_climber_primary = { card_id: "INC-BIZ-004", established_round: 2 };
     const tax = calculate(input);
     const saved = structuredClone(tax.calculation);
     const before = structuredClone(input);
     assert.equal(record(tax.round.income_by_category)["investment-income"], 500);
-    assert.equal(tax.round.investment_asset_value, 10000);
-    assert.equal(tax.dependents.length, pathway.id === "PATH-003" ? 3 : 2);
+    assert.equal(tax.round.investment_asset_value, round === 5 ? 20000 : 10000);
+    assert.equal(tax.dependents.length, (round === 5 ? 1 : 2) + (pathway.id === "PATH-003" ? 1 : 0));
     assert.equal(tax.applied.filing_status_applied, "MFJ");
     assert.equal(tax.applied.homeowner_after, true);
-    if (pathway.id === "PATH-008") {
+    if (retirement) {
       assert.equal(record(tax.round.income_by_category)["w2-wages"], 0);
       assert.equal(record(tax.round.income_by_category)["social-security"], 28000);
       assert.equal(tax.round.social_security_included, 14000);
@@ -651,7 +659,7 @@ for (const pathway of workbookData.pathways) {
         - results.livingCosts - financialInput.finalTax - 4000
       ) * 100) / 100, "cash includes income, Living Costs and final tax only once");
       const stored = {
-        round_number: 4,
+        round_number: round,
         cards: input.cards.map((card) => ({ stage: card.stage, card_id: card.card_id })),
         results: {
           version: 2, pathway_id: pathway.id, scenario_id: input.life.starting_decision_id,
@@ -673,12 +681,12 @@ for (const pathway of workbookData.pathways) {
       };
       const restored = summarizeStoredResults(JSON.parse(JSON.stringify(stored)));
       assert.ok(restored);
-      assert.equal(restored.roundNumber, 4);
+      assert.equal(restored.roundNumber, round);
       assert.equal(restored.taxPrepaid, fixedPayment);
       assert.equal(restored.endingCash, results.endingCash);
       assert.equal(restored.activeDependents, tax.dependents.length);
       assert.equal(restored.details?.investmentIncome, 500);
-      assert.equal(restored.details?.investmentAssetValue, 10000);
+      assert.equal(restored.details?.investmentAssetValue, round === 5 ? 20000 : 10000);
       assert.equal(restored.details?.auditResolution, "bypassed-beta");
       assert.deepEqual(computeRoundResults(financialInput), results);
       assert.deepEqual(toFinalizePayload(computeRoundResults(financialInput)), toFinalizePayload(results));

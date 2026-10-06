@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { StoredResults } from "@/lib/round-results";
 import { LEDGER_ROUNDS, lifeLedgerRows, loadEarlierLedgerRounds } from "@/lib/life-ledger";
+import { buildHighlightReel } from "@/lib/highlight-reel";
+import HighlightReel from "@/components/highlight-reel";
 
 export default function LifeLedger({ current, player }: {
   current: StoredResults;
@@ -35,8 +37,19 @@ export default function LifeLedger({ current, player }: {
   }, [id, resumeToken, current.roundNumber, retry]);
 
   const rows = lifeLedgerRows([...history.rounds, current]);
+  const recap = current.roundNumber === 5 && !history.loading
+    ? history.error
+      ? { ok: false as const, error: history.error }
+      : buildHighlightReel([...history.rounds, current])
+    : null;
   return (
     <section className="mt-6">
+      {current.roundNumber === 5 ? (
+        <HighlightReel result={recap} loading={history.loading} onRetry={() => {
+          setHistory((previous) => ({ ...previous, loading: true, error: "" }));
+          setRetry((value) => value + 1);
+        }} />
+      ) : null}
       <h3 id="life-ledger-heading" className="text-xl font-black">Life Ledger</h3>
       <p className="mt-2 text-sm">Saved completed rounds. A dash means no saved value is available.</p>
       {history.loading ? <p role="status" className="mt-2 text-sm">Loading earlier rounds...</p> : null}

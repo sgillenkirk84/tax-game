@@ -467,3 +467,33 @@ and full five-round financial completion remain locally validated, not yet
 browser/live-verified. Finalized Round 5 remains the application completion
 boundary with database life status unchanged. My Tax Life Story remains
 unimplemented and Round 6 remains unavailable.
+
+## Deterministic Highlight Reel v1 (TASK 10.15.42)
+
+The user has live-verified the complete five-round financial game, including
+Round 5 Results, immutable snapshot, Life Ledger and the final completion
+boundary. The new locally implemented My Tax Life - Highlight Reel is a read-only
+interpretation of the same authenticated finalized Results summaries loaded for
+the Life Ledger. It is not My Tax Life Story and makes no AI/model calls.
+
+After Round 5 Results, the recap precedes the unchanged five-column Life Ledger.
+It validates five unique, ordered, consistent rounds and uses saved values/card
+IDs only. Missing historical details omit dependent candidates; history failures
+show a retry without undoing game completion. Curated factual templates never
+reconstruct tax, settlement, effects, deduction advantage or investment returns.
+Currency retains meaningful cents, including $169.50.
+
+Candidate categories are Retirement, Life Milestone, Credits Applied, Investment
+Journey, Curveball, Biggest Refund, Closest Prepayment, Debt Journey, Deduction
+Pattern, Biggest Change and Where You Finished. That listed order is the fixed
+editorial selection priority, not a financial score; Where You Finished is always
+last. Up to six diverse, non-overlapping candidates precede it. Fewer are shown
+when data does not support more. Monetary ties use the earliest round; changes
+compare one named metric (AGI, cash, debt, then tax), with the earliest pair
+breaking ties. Life/Wildcard events use documented fixed ID priority, then round,
+saved card order and ID. Repeated investment draws remain separate events.
+
+No API route, persistence, migration, database access widening, financial change,
+environment change or Round 6 is added. Database life status remains unchanged.
+This local task does not execute SQL, modify Supabase, commit, push or deploy.
+The Highlight Reel itself is not yet live-verified.

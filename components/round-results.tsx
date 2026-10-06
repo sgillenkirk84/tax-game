@@ -302,7 +302,9 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           />
         ))}
       </Section>
-      <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
+      {results.roundNumber < MAX_PLAYABLE_ROUND ? (
+        <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
+      ) : null}
       {results.roundNumber === MAX_PLAYABLE_ROUND ? (
         <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
           Your five-round financial game is complete. All five rounds of Results and your Life Ledger
@@ -332,6 +334,9 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
           Round {results.roundNumber} is complete. Your teacher will let you know when the next round opens.
         </p>
       )}
+      {results.roundNumber === MAX_PLAYABLE_ROUND ? (
+        <LifeLedger key={`${player.id}-${results.roundNumber}`} current={results} player={player} />
+      ) : null}
     </section>
   );
 }

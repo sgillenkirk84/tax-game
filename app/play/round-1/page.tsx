@@ -61,6 +61,7 @@ export default function RoundOnePage() {
   const [error, setError] = useState("");
   const [round, setRound] = useState<RoundOne | null>(null);
   const [player, setPlayer] = useState<{ id: string; resumeToken: string } | null>(null);
+  const [postGame, setPostGame] = useState(false);
 
   const load = useCallback(async () => {
     startTransition(() => setState("loading"));
@@ -160,6 +161,7 @@ export default function RoundOnePage() {
   const scenario = scenarios[round.scenarioId];
   return (
     <Shell>
+      <div hidden={postGame && round.roundNumber === 5}>
       <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
         Round {round.roundNumber} of {round.totalRounds}
       </p>
@@ -189,6 +191,7 @@ export default function RoundOnePage() {
           </div>
         </div>
       </dl>
+      </div>
       {process.env.NEXT_PUBLIC_CARD_ENTRY_ENABLED === "true" && player ? (
         <RoundDashboard
           key={round.roundNumber}
@@ -196,6 +199,7 @@ export default function RoundOnePage() {
           pathwayId={round.pathwayId}
           player={player}
           onRoundStarted={() => void load()}
+          onPostGameChange={setPostGame}
         />
       ) : (
         <p className="mt-6 text-sm text-[var(--brand-navy)]/70">Card entry for this round is coming soon.</p>

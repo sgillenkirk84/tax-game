@@ -340,18 +340,18 @@ test("Life Ledger loading is reused, incomplete fetches fail, table and financia
 test("only finalized Round 5 opens a separate recap; Results and five-column ledger are not stacked into it", () => {
   const owner = read("../components/round-results.tsx");
   const branch = owner.slice(owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "highlights")'),
-    owner.indexOf("const taxResult ="));
+    owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "ledger")'));
   assert.ok(branch.length > 0);
   assert.ok(owner.indexOf("if (!results)") < owner.indexOf(branch), "saved Results are required first");
   assert.match(branch, /return \([\s\S]*<HighlightReel/);
-  assert.match(branch, /onBack=\{\(\) => setView\("results"\)\}/);
+  assert.match(branch, /onBack=\{\(\) => changeView\("results"\)\}/);
   assert.doesNotMatch(branch, /<LifeLedger|<Row|<Section|finish\(|startNext\(/);
   const normal = owner.slice(owner.indexOf("const taxResult ="));
   assert.doesNotMatch(normal, /<HighlightReel/);
   assert.match(normal, /Round \{results.roundNumber\} Results/);
   assert.match(normal, /<LifeLedger current=\{results\} history=\{history\}/);
-  assert.ok(normal.indexOf("<LifeLedger") < normal.indexOf("View Highlight Reel"));
-  assert.match(normal, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*onClick=\{\(\) => setView\("highlights"\)\}[\s\S]*View Highlight Reel[\s\S]*nextEnabled/);
+  assert.match(normal, /results.roundNumber < MAX_PLAYABLE_ROUND \? \([\s\S]*<LifeLedger/);
+  assert.match(normal, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*onClick=\{\(\) => changeView\("highlights"\)\}[\s\S]*View My Tax Life Recap[\s\S]*nextEnabled/);
   assert.match(normal, /onClick=\{\(\) => void startNext\(\)\}[\s\S]*Start Round \$\{nextRound\}/);
   assert.match(owner, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
   assert.doesNotMatch(normal, /Start Round 6|Continue to Round 6|>Next Round</);
@@ -359,7 +359,7 @@ test("only finalized Round 5 opens a separate recap; Results and five-column led
 
 test("recap navigation and refresh use only local view state; shared history survives view changes", () => {
   const owner = read("../components/round-results.tsx");
-  assert.match(owner, /useState<"results" \| "highlights">\("results"\)/);
+  assert.match(owner, /useState<"results" \| "highlights" \| "ledger">\("results"\)/);
   assert.match(owner, /\[id, resumeToken, finalizedRound, historyRetry\]/);
   assert.doesNotMatch(owner, /\[id, resumeToken, finalizedRound, historyRetry, view\]/);
   assert.match(owner, /if \(finalizedRound === undefined\) return/);
@@ -367,10 +367,47 @@ test("recap navigation and refresh use only local view state; shared history sur
   assert.match(owner, /\[restore\]/);
   assert.doesNotMatch(owner, /\[restore, view\]|localStorage|sessionStorage|pushState|router\.push/);
   const branch = owner.slice(owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "highlights")'),
-    owner.indexOf("const taxResult ="));
+    owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "ledger")'));
   assert.doesNotMatch(branch, /setResults|fetch\(|finish\(|startNext\(|results-finalize|next-round|snapshot/);
   assert.match(owner, /highlightHeading.current\?\.focus\(\)/);
   assert.match(owner, /resultsHeading.current\?\.focus\(\)/);
+});
+
+test("terminal ledger is a separate shared-history post-game view with direct back paths", () => {
+  const owner = read("../components/round-results.tsx");
+  const ledger = owner.slice(owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "ledger")'), owner.indexOf("const taxResult ="));
+  assert.match(ledger, /My Tax Life &mdash; Full Life Ledger/);
+  assert.match(ledger, /<LifeLedger current=\{results\} history=\{history\} onRetry=\{retryHistory\}/);
+  assert.match(ledger, /changeView\("highlights"\)[\s\S]*Back to Highlight Reel/);
+  assert.match(ledger, /changeView\("results"\)[\s\S]*Back to Round 5 Results/);
+  assert.doesNotMatch(ledger, /fetch\(|finish\(|startNext\(|setResults|snapshot/);
+  const ui = read("../components/highlight-reel.tsx");
+  assert.match(ui, /onClick=\{onViewLedger\}[^>]*>View Full Life Ledger/);
+  assert.match(owner, /onViewLedger=\{\(\) => changeView\("ledger"\)\}/);
+  assert.match(owner, /ledgerHeading.current\?\.focus\(\)/);
+  const normal = owner.slice(owner.indexOf("const taxResult ="));
+  assert.equal(normal.split("View My Tax Life Recap").length - 1, 1);
+});
+
+test("post-game hides dashboard cards and opening information without remounting Results or altering prior rounds", () => {
+  const dashboard = read("../components/round-dashboard.tsx");
+  assert.match(dashboard, /const terminalPostGame = round === 5 && active/);
+  assert.match(dashboard, /setPostGame\(terminalPostGame\)/);
+  assert.match(dashboard, /onPostGameChange\?\.\(terminalPostGame\)/);
+  assert.match(dashboard, /<li key=\{step.id\} hidden=\{postGame\}/);
+  assert.match(dashboard, /completedNeedsNote && !postGame/);
+  assert.match(dashboard, /aria-label=\{postGame \? "Post-game review" : "Round stages"\}/);
+  assert.equal(dashboard.split("onPostGameChange={handlePostGameChange}").length - 1, 2, "normal and finalized recovery use the same callback");
+  assert.doesNotMatch(dashboard, /if \(postGame\)|postGame \? <RoundResults|key=\{postGame/);
+  const page = read("../app/play/round-1/page.tsx");
+  assert.match(page, /hidden=\{postGame && round.roundNumber === 5\}/);
+  assert.match(page, /onPostGameChange=\{setPostGame\}/);
+  assert.doesNotMatch(page, /postGame \? <RoundDashboard|key=\{postGame/);
+  const owner = read("../components/round-results.tsx");
+  const transition = owner.slice(owner.indexOf("  function changeView"), owner.indexOf("  function retryHistory"));
+  assert.match(transition, /setView\(next\)/);
+  assert.match(transition, /onPostGameChange\?\.\(next !== "results"\)/);
+  assert.doesNotMatch(transition, /fetch\(|finish|startNext|setResults|nextRound|life.status/);
 });
 
 test("recap history errors and loading preserve completion with retry and unconditional back navigation", () => {

@@ -1,11 +1,12 @@
 import type { HighlightResult } from "@/lib/highlight-reel";
 import type { Ref } from "react";
 
-export default function HighlightReel({ result, loading, onRetry, onBack, headingRef }: {
+export default function HighlightReel({ result, loading, onRetry, onBack, onViewLedger, headingRef }: {
   result: HighlightResult | null;
   loading: boolean;
   onRetry: () => void;
   onBack: () => void;
+  onViewLedger: () => void;
   headingRef: Ref<HTMLHeadingElement>;
 }) {
   return (
@@ -30,7 +31,10 @@ export default function HighlightReel({ result, loading, onRetry, onBack, headin
           ))}
         </ol>
       ) : null}
-      <button type="button" onClick={onBack} className="mt-4 inline-block text-sm font-bold underline">Back to Round 5 Results</button>
+      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm font-bold">
+        <button type="button" onClick={onViewLedger} className="rounded-xl bg-[var(--brand-navy)] px-6 py-3 text-white">View Full Life Ledger</button>
+        <button type="button" onClick={onBack} className="underline">Back to Round 5 Results</button>
+      </div>
     </section>
   );
 }

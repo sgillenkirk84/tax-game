@@ -14,6 +14,7 @@ type RoundDashboardProps = {
   pathwayId: string;
   player: { id: string; resumeToken: string };
   onRoundStarted?: () => void;
+  onPostGameChange?: (active: boolean) => void;
 };
 
 type Progress = {
@@ -32,7 +33,13 @@ const money = (value: number) =>
 // current stage's card selection, and compact locked future stages. Saved-card
 // records are the only source of truth, and a student moves on only by choosing
 // Continue after their card is saved.
-export default function RoundDashboard({ round, pathwayId, player, onRoundStarted }: RoundDashboardProps) {
+export default function RoundDashboard({ round, pathwayId, player, onRoundStarted, onPostGameChange }: RoundDashboardProps) {
+  const [postGame, setPostGame] = useState(false);
+  function handlePostGameChange(active: boolean) {
+    const terminalPostGame = round === 5 && active;
+    setPostGame(terminalPostGame);
+    onPostGameChange?.(terminalPostGame);
+  }
   const [progress, setProgress] = useState<Progress | null>(null);
   const [loadError, setLoadError] = useState("");
   const [currentSaved, setCurrentSaved] = useState(false);
@@ -107,7 +114,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
   if (!progress) {
     if (loadError && resultsEnabled) {
       // A finished round no longer has an in-progress stage, so restore its saved Results instead.
-      return <RoundResults round={round} player={player} restoreOnly restoreFailure={loadError} onRoundStarted={onRoundStarted} />;
+      return <RoundResults round={round} player={player} restoreOnly restoreFailure={loadError} onRoundStarted={onRoundStarted} onPostGameChange={handlePostGameChange} />;
     }
     return loadError ? (
       <div role="alert" className="mt-8 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">
@@ -135,13 +142,13 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
 
   return (
     <div className="mt-8">
-      <ol className="space-y-3" aria-label="Round stages">
+      <ol className="space-y-3" aria-label={postGame ? "Post-game review" : "Round stages"}>
         {ACTIVE_ROUND_FLOW.map((step, index) => {
           const label = labelFor(step.id, step.label);
           if (index < currentIndex) {
             const cards = cardsFor(step.id);
             return (
-              <li key={step.id} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
+              <li key={step.id} hidden={postGame} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-green-800">Completed · {label}</p>
                 {step.kind === "automatic" ? (
                   round >= 1 && round <= 5 ? (
@@ -170,7 +177,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                 {step.id === "tax-prepayment" && prepaymentEnabled ? (
                   <TaxPrepayment round={round} player={player} pathwayId={pathwayId} onFixedChange={setPrepaymentFixed} />
                 ) : step.id === "results-and-life-ledger" && resultsEnabled ? (
-                  <RoundResults round={round} player={player} onRoundStarted={onRoundStarted} />
+                  <RoundResults round={round} player={player} onRoundStarted={onRoundStarted} onPostGameChange={handlePostGameChange} />
                 ) : isCardStage(step.id) ? (
                   <CardEntry
                     key={step.id}
@@ -254,7 +261,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
           );
         })}
       </ol>
-      {completedNeedsNote ? (
+      {completedNeedsNote && !postGame ? (
         <p className="mt-4 text-xs leading-snug text-[var(--brand-navy)]/70">{STANDARD_DEDUCTION_NOTE}</p>
       ) : null}
     </div>

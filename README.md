@@ -516,3 +516,22 @@ The deterministic selector, cents, evidence rules and factual wording are
 unchanged. No API, persistence, migration, financial operation, database life
 status change, AI or Round 6 is added. This navigation change is locally
 validated, not yet published or Production/live-verified.
+
+## Final-round to post-game boundary (TASK 10.15.46)
+
+This locally validated presentation change ends saved Round 5 Results with one
+View My Tax Life Recap action. Neither the Highlight Reel nor the full Life Ledger
+is inline under final-round Results. The separate recap offers View Full Life
+Ledger; that separate post-game view offers Back to Highlight Reel and Back to
+Round 5 Results. Rounds 1-4 keep their existing inline ledger and progression.
+
+Results owns three local read-only views and one shared finalized-history load.
+Post-game navigation hides the page's round-opening information and completed
+dashboard stages without unmounting Results/history. Returning restores saved
+Results and gameplay history without financial writes or duplicate history reads.
+Refresh returns to saved Results. Loading/error/retry/back behavior is preserved.
+
+The selector, ledger data/formatting, financial completion boundary and database
+life status are unchanged. No API, persistence, SQL, migration, Supabase or
+environment change, AI or Round 6 is introduced. This task is not published or
+Production/live-verified.

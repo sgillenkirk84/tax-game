@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildRoundTaxCalculation, type RoundTaxSnapshot } from "./round-tax.ts";
 import { dependentExpiresAfter } from "./round-rules.ts";
-import { computeRoundResults, economicGrossIncome, toFinalizePayload } from "./round-results.ts";
+import { computeRoundResults, economicGrossIncome, summarizeStoredResults, toFinalizePayload } from "./round-results.ts";
 import { calculateFederalIncomeTax, calculateEarlyRetirementIncome, calculateGameTax } from "./game-calculations/calculations.ts";
 import workbookData from "./game-data/workbook-data.json" with { type: "json" };
 
@@ -476,6 +476,21 @@ test("Round 4 mixed retirement scenario taxes only the approved Social Security 
   assert.equal(result.round.tax_before_credits, 3391.5);
   assert.equal(result.round.final_tax_liability, 3391.5);
   assert.equal(result.calculation.tax_prepayment, undefined);
+  const saved = structuredClone(result);
+  const settled = computeRoundResults({
+    beginningCash: 0, beginningDebt: 0,
+    grossIncome: Number(saved.round.gross_income),
+    adjustedGrossIncome: Number(saved.round.adjusted_gross_income),
+    finalTax: Number(saved.round.final_tax_liability),
+    fixedPrepayment: 3561, pendingEffects: saved.calculation.pending_effects,
+  });
+  assert.equal(settled.calculatedTax, 3391.5);
+  assert.equal(settled.taxPrepaid, 3561);
+  assert.equal(settled.taxRefund, 169.5);
+  assert.equal(settled.taxAmountDue, 0);
+  assert.equal(settled.livingCosts, 34300);
+  assert.equal(settled.endingCash, 22308.5);
+  assert.deepEqual(result, saved);
 });
 
 test("Round 4 lower card preserves its distribution component in the saved inputs while the existing $42,000 guarantee wins", () => {
@@ -580,3 +595,93 @@ test("Round 4 tax rejects wrong card sources, incomplete stages and unsupported 
   assert.ok(!fifth.ok);
   assert.equal(fifth.code, "ROUND_NOT_SUPPORTED");
 });
+
+for (const pathway of workbookData.pathways) {
+  test(`Round 4 ${pathway.id} Results consume saved tax/payment without reapplying household, investments or lifecycle effects`, () => {
+    const input = snapshot({
+      round: 4, pathway: pathway.id, filing: "MFJ", lifeCard: "LIFE-001",
+      income: pathway.id === "PATH-008" ? ["RET-MIX-003"]
+        : ["PATH-002", "PATH-006"].includes(pathway.id) ? ["INC-W2-004", "INC-BIZ-002"] : ["INC-W2-004"],
+    });
+    input.life.homeowner = true;
+    input.round.beginning_cash_resources = -20000;
+    input.round.beginning_student_loan_debt = 10000;
+    input.effects = [dependent(2), dependent(3, "LIFE-008"), dependent(3, "LIFE-010", "removed")];
+    input.investments = [{
+      source_type: "card-history", source_card_id: "WILD-007", acquired_round: 3,
+      activation_round: 4, recurring_income_per_round: 500, asset_value: 10000, status: "active",
+    }];
+    if (pathway.id === "PATH-001") input.life.corporate_climber_primary = { card_id: "INC-BIZ-004", established_round: 2 };
+    const tax = calculate(input);
+    const saved = structuredClone(tax.calculation);
+    const before = structuredClone(input);
+    assert.equal(record(tax.round.income_by_category)["investment-income"], 500);
+    assert.equal(tax.round.investment_asset_value, 10000);
+    assert.equal(tax.dependents.length, pathway.id === "PATH-003" ? 3 : 2);
+    assert.equal(tax.applied.filing_status_applied, "MFJ");
+    assert.equal(tax.applied.homeowner_after, true);
+    if (pathway.id === "PATH-008") {
+      assert.equal(record(tax.round.income_by_category)["w2-wages"], 0);
+      assert.equal(record(tax.round.income_by_category)["social-security"], 28000);
+      assert.equal(tax.round.social_security_included, 14000);
+      assert.equal(tax.round.gross_income, 60500);
+      assert.equal(tax.round.adjusted_gross_income, 46500);
+      assert.equal(tax.applied.spouse_income, null);
+    }
+    for (const fixedPayment of [0, 3561, 9999]) {
+      const financialInput = {
+        beginningCash: input.round.beginning_cash_resources,
+        beginningDebt: input.round.beginning_student_loan_debt,
+        grossIncome: economicGrossIncome(Number(tax.round.gross_income), saved.pending_effects),
+        adjustedGrossIncome: Number(tax.round.adjusted_gross_income),
+        finalTax: Number(tax.round.final_tax_liability),
+        fixedPrepayment: fixedPayment, pendingEffects: saved.pending_effects,
+      };
+      const results = computeRoundResults(financialInput);
+      assert.equal(results.taxPrepaid, fixedPayment);
+      assert.equal(results.taxRefund, Math.max(0, fixedPayment - financialInput.finalTax));
+      assert.equal(results.taxAmountDue, Math.max(0, financialInput.finalTax - fixedPayment));
+      assert.equal(results.studentLoanPayment, 4000);
+      assert.equal(results.endingDebt, 6000);
+      assert.equal(results.auditPenalty, 0);
+      assert.equal(results.endingCash, Math.round((
+        financialInput.beginningCash + financialInput.grossIncome
+        - results.livingCosts - financialInput.finalTax - 4000
+      ) * 100) / 100, "cash includes income, Living Costs and final tax only once");
+      const stored = {
+        round_number: 4,
+        cards: input.cards.map((card) => ({ stage: card.stage, card_id: card.card_id })),
+        results: {
+          version: 2, pathway_id: pathway.id, scenario_id: input.life.starting_decision_id,
+          beginning_cash: results.beginningCash, gross_income: results.grossIncome,
+          adjusted_gross_income: financialInput.adjustedGrossIncome,
+          other_cash_inflows: results.otherCashInflows, living_costs: results.livingCosts,
+          personal_expenses: results.personalExpenses, calculated_tax: results.calculatedTax,
+          tax_prepaid: fixedPayment, tax_refund: results.taxRefund, tax_amount_due: results.taxAmountDue,
+          audit_penalty: 0, beginning_student_loan_debt: financialInput.beginningDebt,
+          student_loan_payment: results.studentLoanPayment, ending_student_loan_debt: results.endingDebt,
+          ending_cash: results.endingCash, filing_status: tax.applied.filing_status_applied,
+          homeowner: tax.applied.homeowner_after, active_dependents: tax.dependents.length,
+          deduction_method: tax.round.deduction_method, deduction_amount: tax.round.deduction_amount,
+          taxable_income: tax.round.taxable_income, tax_before_credits: tax.round.tax_before_credits,
+          credits_applied: tax.round.credits_total, prepayment_rate_pct: 105,
+          investment_income: tax.round.investment_income, investment_asset_value: tax.round.investment_asset_value,
+          audit_resolution: "bypassed-beta", audit_trigger: saved.audit_trigger,
+        },
+      };
+      const restored = summarizeStoredResults(JSON.parse(JSON.stringify(stored)));
+      assert.ok(restored);
+      assert.equal(restored.roundNumber, 4);
+      assert.equal(restored.taxPrepaid, fixedPayment);
+      assert.equal(restored.endingCash, results.endingCash);
+      assert.equal(restored.activeDependents, tax.dependents.length);
+      assert.equal(restored.details?.investmentIncome, 500);
+      assert.equal(restored.details?.investmentAssetValue, 10000);
+      assert.equal(restored.details?.auditResolution, "bypassed-beta");
+      assert.deepEqual(computeRoundResults(financialInput), results);
+      assert.deepEqual(toFinalizePayload(computeRoundResults(financialInput)), toFinalizePayload(results));
+    }
+    assert.deepEqual(input, before);
+    assert.deepEqual(tax.calculation, saved, "Results cannot mutate or reclassify saved retirement/regular income");
+  });
+}

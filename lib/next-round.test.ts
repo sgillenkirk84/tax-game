@@ -234,10 +234,11 @@ test("Round 3 physical Income and supported stages reuse existing card rules", (
   assert.doesNotMatch(entry, /Math\.random/);
 });
 
-test("Round 4 can advance through shared Prepayment but Results stay closed", () => {
+test("Round 4 can advance through shared Results but Round 5 stays closed", () => {
   assert.deepEqual(advanceTarget("deduction", 3), { stage: "tax-prepayment", label: "Tax Prepayment" });
   assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
-  assert.equal(advanceTarget("tax-prepayment", 4), null);
+  assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
+  assert.equal(advanceTarget("tax-prepayment", 5), null);
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 3), { min: 1, max: 1 });
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-001", 4), { min: 1, max: 1 });
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -247,7 +248,7 @@ test("Round 4 can advance through shared Prepayment but Results stay closed", ()
   const resultsMigration = read("../supabase/migrations/20261005170000_round_three_results.sql");
   assert.match(resultsMigration, /if life_row\.current_round not between 1 and 3 then/);
   assert.match(read("../app/api/rounds/prepayment/route.ts"), /body\.round > 4/);
-  assert.match(read("./round-results.ts"), /round <= 3 && round <= maxEnabledRound/);
+  assert.match(read("./round-results.ts"), /round <= 4 && round <= maxEnabledRound/);
   const dashboard = read("../components/round-dashboard.tsx");
   assert.match(dashboard, /taxCalculated && prepaymentEnabled && round <= 4/);
 });
@@ -317,7 +318,7 @@ test("Round 4 opens shared card stages through Deduction and keeps all regular-l
     assert.equal(advanceTarget("life-event", 4)?.stage, "wildcard");
     assert.equal(advanceTarget("wildcard", 4)?.stage, "deduction");
     assert.equal(advanceTarget("deduction", 4)?.stage, "tax-prepayment");
-    assert.equal(advanceTarget("tax-prepayment", 4), null);
+    assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
     for (const stage of CARD_STAGES) {
       assert.equal(isRoundCardStageAvailable(stage, 5), false);
       assert.equal(advanceTarget(stage, 5), null);
@@ -328,7 +329,7 @@ test("Round 4 opens shared card stages through Deduction and keeps all regular-l
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 4), /two cards/);
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-002", 4), /Business Income/);
   assert.match(stageInstructionsFor("life-event", "PATH-003", 4), /permanent dependent token/);
-  assert.equal(resultsAvailableForRound(4, 4), false);
+  assert.equal(resultsAvailableForRound(4, 4), true);
 });
 
 test("Round 4 boundary expires only effects due now; permanent and Round 3 effects remain and removed effects stay removed", () => {
@@ -505,6 +506,22 @@ test("Round 4 migrations patch only authorized gates in the cumulative installed
   assert.match(prepaymentSql, /fn.prosecdef/);
   assert.match(prepaymentSql, /search_path=pg_catalog/);
   assert.doesNotMatch(prepaymentSql, /mm_fix_round_prepayment|finalize_round_results|alter table|update public\.|insert into public\./);
+  const beforeResults = new Map(definitions);
+  const resultsSql = patch("20261005210000_round_four_results.sql", 2);
+  for (const key of [startKey, recordKey, keepKey, taxKey]) {
+    assert.equal(definitions.get(key), beforeResults.get(key), key);
+  }
+  assert.equal(definitions.get(advanceKey), beforeResults.get(advanceKey)!.replace(
+    "when 'tax-prepayment' then\n      if life_row.current_round between 1 and 3 then",
+    "when 'tax-prepayment' then\n      if life_row.current_round between 1 and 4 then",
+  ));
+  assert.equal(definitions.get(finalizerKey), beforeResults.get(finalizerKey)!.replace(
+    "if life_row.current_round not between 1 and 3 then",
+    "if life_row.current_round not between 1 and 4 then",
+  ));
+  assert.match(resultsSql, /old_count <> 1/);
+  assert.match(resultsSql, /fn.prosecdef/);
+  assert.match(resultsSql, /search_path=pg_catalog/);
 });
 
 test("Round 4 API/UI restore and card entry reuse authoritative IDs, retry keys and stage guards without random draws", () => {

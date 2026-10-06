@@ -271,4 +271,27 @@ After fixed Prepayment, Round 4 stops; Results/Life Ledger and Round 5 stay clos
 recording Prepayment, Deduction-to-Prepayment advancement, and Climber keep gates.
 No formula, rate, tax, history or environment changes are made. This local migration
 has not been executed or installed by this task.
-Round 4 Tax Prepayment is locally validated but has not yet been live-verified.
+At TASK 10.15.30 publication, Round 4 Tax Prepayment was locally validated but
+not yet live-verified. Its subsequent live verification is recorded below.
+
+## Round 4 Results and Life Ledger (TASK 10.15.31)
+
+The opening transition was live-verified: Early Retiree received Retirement cards
+and a regular pathway received Income cards. Round 4 through saved Tax Calculation
+was live-verified after manual installation in TEST/Production and redeployment.
+Tax Prepayment was subsequently published and is now publicly live-verified on
+the Production Vercel deployment. Round 4 Results/Life Ledger are not yet
+live-verified; Round 4 completion is not claimed.
+
+This local extension reuses the shared atomic finalizer and rounds-as-columns
+ledger. It consumes saved tax outputs and the persisted fixed Tax Prepayment,
+never rerunning retirement taxation or payment arithmetic. Settlement, progressive
+AGI-based Living Costs, loan principal, household handoff, investments and effect
+lifecycle are unchanged. Triggered Audit remains unresolved `bypassed-beta`,
+with no adjustment or penalty.
+
+`supabase/migrations/20261005210000_round_four_results.sql` widens only the
+Tax Prepayment-to-Results advancement and shared finalization gates through Round 4.
+The existing immutable `{round, cards}` snapshot and read path need no schema change.
+Rounds 1-3 history is untouched. Round 5 start/gameplay remain closed.
+The migration has not been executed; no environment values change.

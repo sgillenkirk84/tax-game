@@ -379,10 +379,11 @@ test("Round 4 Retirement saved tax feeds every shared physical prepayment rate w
   assert.doesNotMatch(helper, /calculateEarlyRetirementIncome|income_components|gross_income|adjusted_gross_income|taxable_income/);
 });
 
-test("Round 4 fixed payment restores as stored, stops before Results, and Round 5 stays closed", () => {
+test("Round 4 fixed payment restores as stored, enables shared Results, and Round 5 stays closed", () => {
   assert.equal(advanceTarget("deduction", 4)?.stage, "tax-prepayment");
-  assert.equal(advanceTarget("tax-prepayment", 4), null);
-  assert.equal(resultsAvailableForRound(4, 4), false);
+  assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
+  assert.equal(resultsAvailableForRound(4, 4), true);
+  assert.equal(resultsAvailableForRound(5, 5), false);
   assert.equal(advanceTarget("deduction", 5), null);
   assert.deepEqual(stageCardRules("tax-prepayment", "PATH-008", 5), { min: 0, max: 0 });
   const stored = {

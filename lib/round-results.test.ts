@@ -19,16 +19,19 @@ const base = {
 // Living costs at AGI $60,000: 30,000x85% + 20,000x55% + 10,000x45% = 25,500 + 11,000 + 4,500.
 const LIVING_60K = 41000;
 
-test("Rounds 1-3 offer shared Results within the configured limit; Round 4 remains closed", () => {
+test("Rounds 1-4 offer shared Results within the configured limit; Round 5 remains closed", () => {
   assert.deepEqual(advanceTarget("tax-prepayment", 2), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
   assert.equal(resultsAvailableForRound(2, 1), false);
   assert.equal(resultsAvailableForRound(2, 2), true);
   assert.equal(resultsAvailableForRound(1, 2), true);
   assert.equal(resultsAvailableForRound(3, 2), false);
   assert.equal(resultsAvailableForRound(3, 3), true);
-  assert.equal(resultsAvailableForRound(4, 5), false);
+  assert.equal(resultsAvailableForRound(4, 3), false);
+  assert.equal(resultsAvailableForRound(4, 4), true);
+  assert.equal(resultsAvailableForRound(5, 5), false);
   assert.deepEqual(advanceTarget("tax-prepayment", 3), { stage: "results-and-life-ledger", label: "Results and Life Ledger" });
-  assert.equal(advanceTarget("tax-prepayment", 4), null);
+  assert.equal(advanceTarget("tax-prepayment", 4)?.stage, "results-and-life-ledger");
+  assert.equal(advanceTarget("tax-prepayment", 5), null);
   assert.equal(advanceTarget("results-and-life-ledger", 3), null);
 });
 
@@ -220,7 +223,7 @@ test("Results APIs enforce shared availability and next-round RPC requires final
   assert.match(ui, /if \(!results\)/);
 });
 
-test("Round 3 migration changes only two gates in the cumulative installed Results definitions", () => {
+test("Round 3 and Round 4 Results migrations change only two gates in cumulative installed definitions", () => {
   const read = (name: string) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const extract = (source: string, name: string) => {
     const start = source.indexOf(`create or replace function public.${name}(`);
@@ -242,7 +245,7 @@ test("Round 3 migration changes only two gates in the cumulative installed Resul
     for (const [, signature, oldBlock, oldString, newBlock, newString] of changes) {
       const source = definitions.get(signature);
       if (!source) {
-        assert.match(signature, /^public\.(record_round_card|keep_round_prepayment_card)\(/);
+        assert.match(signature, /^public\.(record_round_card|keep_round_prepayment_card|start_next_round|save_round_tax_result)\(/);
         continue;
       }
       const oldText = oldBlock ?? oldString;
@@ -310,6 +313,50 @@ test("Round 3 migration changes only two gates in the cumulative installed Resul
   assert.match(savedTax, /saved_cards is distinct from \(p_calculation -> 'input_snapshot' -> 'card_history_ids'\)/);
   assert.match(savedTax, /income_min := case when life_row.pathway_id = 'PATH-006' then 2 else 1 end/);
   assert.match(savedTax, /saved_cards -> 'deduction'\) <> 1/);
+  patch("20261005180000_round_four_opening.sql", 2);
+  patch("20261005190000_round_four_tax_calculation.sql", 7);
+  patch("20261005200000_round_four_tax_prepayment.sql", 3);
+  const beforeFourth = new Map(definitions);
+  const fourthSql = patch("20261005210000_round_four_results.sql", 2);
+  const fourthFinalizer = definitions.get(finalizeSignature)!;
+  assert.equal(fourthFinalizer, beforeFourth.get(finalizeSignature)!.replace(
+    "if life_row.current_round not between 1 and 3 then",
+    "if life_row.current_round not between 1 and 4 then",
+  ));
+  assert.equal(definitions.get(advanceSignature), beforeFourth.get(advanceSignature)!.replace(
+    "when 'tax-prepayment' then\n      if life_row.current_round between 1 and 3 then",
+    "when 'tax-prepayment' then\n      if life_row.current_round between 1 and 4 then",
+  ));
+  assert.match(fourthFinalizer, /v_final := round_row.final_tax_liability/);
+  assert.match(fourthFinalizer, /v_prepaid := round_row.fixed_tax_prepayment/);
+  assert.match(fourthFinalizer, /v_refund := greatest\(0, v_prepaid - v_final\)/);
+  assert.match(fourthFinalizer, /v_due := greatest\(0, v_final - v_prepaid\)/);
+  assert.match(fourthFinalizer, /v_living[\s\S]*least\(v_agi, 30000\) \* 0.85/);
+  assert.match(fourthFinalizer, /tax_prepayment' is null[\s\S]*PREPAYMENT_REQUIRED/);
+  assert.match(fourthFinalizer, /jsonb_array_length\(round_row.input_snapshot -> 'dependents'\)/);
+  assert.match(fourthFinalizer, /'bypassed-beta' else 'not-triggered'/);
+  assert.match(fourthFinalizer, /audit_adjustment_income = 0,\s+audit_penalty = 0/);
+  assert.match(fourthFinalizer, /where id = round_row.id/);
+  assert.match(fourthFinalizer, /'round', pg_catalog.to_jsonb\(round_row\)/);
+  assert.match(fourthFinalizer, /player.resume_token_hash = p_resume_token_hash\s+for update/);
+  assert.match(fourthFinalizer, /game_round.round_number = p_round_number\s+for update/);
+  assert.match(fourthFinalizer, /operation_row.request_fingerprint <> fingerprint/);
+  assert.match(fourthFinalizer, /IDEMPOTENCY_KEY_REUSED/);
+  assert.match(fourthFinalizer, /life_row.cash_resources is distinct from round_row.beginning_cash_resources/);
+  assert.equal(fourthFinalizer.split("insert into public.mm_game_life_ledger").length - 1, 1);
+  assert.ok(fourthFinalizer.indexOf("if round_row.status = 'finalized' then") < fourthFinalizer.indexOf("update public.mm_game_effects"));
+  assert.doesNotMatch(fourthFinalizer, /mm_fix_round_prepayment|calculateEarlyRetirementIncome|set fixed_tax_prepayment|set persistent_state|update public.mm_game_investments|expires_after_round\s*=/);
+  assert.doesNotMatch(fourthSql, /get_round_results|start_next_round|alter table|update public\.|insert into public\.|mm_fix_round_prepayment/);
+  assert.match(fourthSql, /grant execute on function public.finalize_round_results.*to service_role/);
+  assert.match(fourthSql, /search_path=pg_catalog/);
+  const start = read("20261005180000_round_four_opening.sql");
+  assert.match(start, /p_round_number not between 2 and 4/);
+  for (const invariant of [
+    "GAME_LEDGER_IMMUTABLE", "GAME_ROUND_FINALIZED",
+    "GAME_LEDGER_SNAPSHOT_ROUND_MISMATCH", "GAME_LEDGER_SNAPSHOT_CARDS_MISMATCH",
+    "GAME_FINALIZED_ROUND_REQUIRES_LEDGER",
+  ]) assert.ok(schema.includes(invariant), invariant);
+  assert.match(schema, /create constraint trigger mm_game_rounds_require_ledger[\s\S]*deferrable initially deferred/);
 });
 
 test("Round 3 read/finish paths require fixed Prepayment and restore without repeating settlement", () => {
@@ -395,6 +442,41 @@ test("Round 3 settlement uses saved payments without double counting and permits
   ]) {
     assert.equal(computeRoundResults({ ...base, adjustedGrossIncome }).livingCosts, livingCosts);
   }
+});
+
+test("Round 4 ledger appends its saved column, preserves all prior columns, and restores unchanged on refresh", async () => {
+  const snapshots = [1, 2, 3, 4].map((round) => ({
+    ...roundTwoStored(round === 4 ? "bypassed-beta" : "not-triggered"), round_number: round,
+  }));
+  const before = structuredClone(snapshots);
+  const prior = snapshots.slice(0, 3).map((stored) => summarizeStoredResults(stored)!);
+  const fourth = summarizeStoredResults(JSON.parse(JSON.stringify(snapshots[3])))!;
+  const previousRows = lifeLedgerRows(prior);
+  const rows = lifeLedgerRows([...prior, fourth]);
+  for (const [index, row] of rows.entries()) {
+    assert.deepEqual(row.values.slice(0, 3), previousRows[index].values.slice(0, 3));
+    assert.notEqual(row.values[3], "\u2014", row.label);
+    assert.equal(row.values[4], "\u2014");
+  }
+  assert.equal(rows.find((row) => row.label === "Tax you prepaid")!.values[3], "$368");
+  assert.equal(rows.find((row) => row.label === "Tax refund")!.values[3], "$368");
+  assert.equal(fourth.activeDependents, 2);
+  assert.equal(fourth.homeowner, true);
+  const calls: number[] = [];
+  const request: typeof fetch = async (_url, init) => {
+    const round = JSON.parse(String(init?.body)).round;
+    calls.push(round);
+    return Response.json({ finalized: true, results: summarizeStoredResults(snapshots[round - 1]) });
+  };
+  const history = await loadEarlierLedgerRounds({ id: "test", resumeToken: "test" }, 4, new AbortController().signal, request);
+  assert.deepEqual(calls, [1, 2, 3]);
+  assert.deepEqual(lifeLedgerRows([...history, fourth]), rows);
+  assert.deepEqual(snapshots, before);
+  const route = readFileSync(new URL("../app/api/rounds/results-finalize/route.ts", import.meta.url), "utf8");
+  assert.ok(route.indexOf("if (current?.finalized)") < route.indexOf("computeRoundResults({"));
+  assert.doesNotMatch(route, /calculatePrepaymentDollars|calculateEarlyRetirementIncome|calculateGameTax|incomeComponents/);
+  const ui = readFileSync(new URL("../components/round-results.tsx", import.meta.url), "utf8");
+  assert.match(ui, /getRoundIncomeCardCategory\(results.pathwayId, results.roundNumber\)/);
 });
 
 test("refund: prepayment above tax adds the refund to cash", () => {

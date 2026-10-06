@@ -168,7 +168,7 @@ export type StoredResults = {
 };
 
 export function resultsAvailableForRound(round: number, maxEnabledRound: number): boolean {
-  return Number.isInteger(round) && round >= 1 && round <= 3 && round <= maxEnabledRound;
+  return Number.isInteger(round) && round >= 1 && round <= 4 && round <= maxEnabledRound;
 }
 
 const num = (value: unknown): number | null =>

@@ -5,6 +5,7 @@ import type { StoredResults } from "@/lib/round-results";
 import { clientMaxEnabledRound } from "@/lib/round-limits";
 import { MAX_PLAYABLE_ROUND } from "@/lib/round-rules";
 import LifeLedger from "@/components/life-ledger";
+import { getRoundIncomeCardCategory } from "@/lib/round-income";
 
 type RoundResultsProps = {
   round: number;
@@ -294,7 +295,9 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
         {results.cards.map((card, position) => (
           <Row
             key={`${card.cardId}-${position}`}
-            label={stageLabels[card.stage] ?? card.stage}
+            label={card.stage === "income-or-retirement"
+              ? getRoundIncomeCardCategory(results.pathwayId, results.roundNumber)
+              : stageLabels[card.stage] ?? card.stage}
             value={names[card.cardId] ?? card.cardId}
           />
         ))}

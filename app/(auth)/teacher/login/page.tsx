@@ -1,5 +1,6 @@
 import Link from "next/link";
 import TeacherLoginForm from "./login-form";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 
 export default async function TeacherLoginPage({
   searchParams,
@@ -20,7 +21,7 @@ export default async function TeacherLoginPage({
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.2)]">
           <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-            Money Moves · Teacher Access
+            {PRODUCT_NAME} · Teacher Access
           </p>
           <h1 className="mt-3 text-3xl font-black text-white">Sign in</h1>
           <p className="mt-3 text-sm leading-relaxed text-[var(--brand-ivory)]/75">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 import { useTeacherName } from "./teacher-identity";
 
 type ApiSessionRecord = {
@@ -248,7 +249,7 @@ export default function TeacherPage() {
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-              Money Moves · Teacher Dashboard
+              {PRODUCT_NAME} · Teacher Dashboard
             </p>
             <h1 className="mt-2 text-3xl font-black text-white sm:text-4xl">
               Beta Session Control

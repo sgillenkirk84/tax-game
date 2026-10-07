@@ -1,5 +1,6 @@
 // Shared, client-safe card-entry definitions. Contains no card data.
 import { getRoundIncomeCardCategory } from "./round-income.ts";
+import { PRODUCT_NAME } from "./site-branding.ts";
 
 export const CARD_STAGES = [
   "income-or-retirement",
@@ -125,7 +126,7 @@ const deckSections: Partial<Record<CardCategory, CardSection[]>> = {
     {
       heading: "Business Income",
       subcategory: "Business",
-      note: "Business income may involve additional self-employment taxes. Money Moves will calculate the applicable taxes automatically.",
+      note: `Business income may involve additional self-employment taxes. ${PRODUCT_NAME} will calculate the applicable taxes automatically.`,
     },
   ],
 };

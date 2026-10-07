@@ -2,6 +2,7 @@
 
 import { STANDARD_DEDUCTION_NOTE, showsStandardDeduction } from "@/lib/standard-deduction";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import SavedCardSummary from "@/components/saved-card-summary";
 import {
   type CardCategory,
   type CardPreview,
@@ -31,6 +32,7 @@ type CardEntryProps = {
   onSavedChange?: (saved: boolean) => void;
   // A Corporate Climber's second Tax Prepayment draw. The first card stays saved.
   redraw?: boolean;
+  compactSavedCards?: boolean;
 };
 
 const saveEnabled = process.env.NEXT_PUBLIC_CARD_SAVE_ENABLED === "true";
@@ -53,6 +55,7 @@ export default function CardEntry({
   onSavedChange,
   hideStandardDeductionNote = false,
   redraw = false,
+  compactSavedCards = false,
 }: CardEntryProps) {
   const [cards, setCards] = useState<CardPreview[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -192,17 +195,21 @@ export default function CardEntry({
                 ? `${savedCards.length} of ${rules.min} cards saved. Draw and save ${rules.min - savedCards.length} more.`
                 : `${savedCards.length} card saved. You may draw ${remaining} more if your pathway allows it.`}
           </p>
-          {savedCards.map((savedCard, position) => (
-            <div key={`${savedCard.id}-${position}`} className="rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-4">
-              <h2 className="text-xl font-black">{savedCard.name}</h2>
-              <p className="mt-2 text-lg leading-relaxed">{savedCard.description}</p>
-              {savedCard.amount !== null ? <p className="mt-2 text-xl font-black">{money(savedCard.amount)}</p> : null}
-              {savedCard.taxCategory ? (
-                <p className="mt-1 text-xs text-[var(--brand-navy)]/70">Tax category: {savedCard.taxCategory}</p>
-              ) : null}
-              <p className="mt-2 font-mono text-[11px] text-[var(--brand-navy)]/50">{savedCard.id}</p>
-            </div>
-          ))}
+          <div className={compactSavedCards ? "grid gap-3 sm:grid-cols-2" : "space-y-3"}>
+            {savedCards.map((savedCard, position) => compactSavedCards ? (
+              <SavedCardSummary key={`${savedCard.id}-${position}`} card={savedCard} pathwayId={pathwayId} />
+            ) : (
+              <div key={`${savedCard.id}-${position}`} className="rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-4">
+                <h2 className="text-xl font-black">{savedCard.name}</h2>
+                <p className="mt-2 text-lg leading-relaxed">{savedCard.description}</p>
+                {savedCard.amount !== null ? <p className="mt-2 text-xl font-black">{money(savedCard.amount)}</p> : null}
+                {savedCard.taxCategory ? (
+                  <p className="mt-1 text-xs text-[var(--brand-navy)]/70">Tax category: {savedCard.taxCategory}</p>
+                ) : null}
+                <p className="mt-2 font-mono text-[11px] text-[var(--brand-navy)]/50">{savedCard.id}</p>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -214,89 +221,94 @@ export default function CardEntry({
 
       {shown ? (
         <div className="mt-4 rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-5">
-          {saved ? (
+          {saved && !compactSavedCards ? (
             <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
               Card saved. This is the card recorded for this stage.
             </p>
-          ) : (
+          ) : !saved ? (
             <p className="mb-2 text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">
               Selected card
             </p>
-          )}
-          <h2 className="text-2xl font-black">{shown.name}</h2>
-          <p className="mt-3 text-lg leading-relaxed">{shown.description}</p>
-          {shown.amount !== null ? <p className="mt-3 text-2xl font-black">{money(shown.amount)}</p> : null}
-          {shown.taxCategory ? (
-            <p className="mt-1 text-xs text-[var(--brand-navy)]/70">Tax category: {shown.taxCategory}</p>
           ) : null}
-          {shown.educationMessage ? (
-            <p className="mt-3 text-sm text-[var(--brand-navy)]/75">{shown.educationMessage}</p>
-          ) : null}
-          {shown.playerChoiceRequired && !choiceConfigFor(shown.id) ? (
-            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-              This card needs a choice from you. Choices are not recorded yet, so only the card itself is saved.
-            </p>
-          ) : null}
-          {shown.triggersAudit ? (
-            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-              This card triggers an audit. Audit results will be handled in a later step; nothing is applied now.
-            </p>
-          ) : null}
-          {shown.roundRule || shown.pathwayRule ? (
-            <p className="mt-2 text-xs text-[var(--brand-navy)]/60">
-              {shown.roundRule ? `Rounds: ${shown.roundRule}. ` : ""}
-              {shown.pathwayRule && shown.pathwayRule !== "None" ? shown.pathwayRule : ""}
-            </p>
-          ) : null}
-          <p className="mt-3 font-mono text-[11px] text-[var(--brand-navy)]/50">
-            {shown.id} · {shown.category}
-            {shown.subcategory ? ` · ${shown.subcategory}` : ""}
-          </p>
-
-          {saved && shown.recordedChoice ? (
-            <p className="mt-3 text-sm font-black">
-              Your choice: {choiceLabel(shown.id, shown.recordedChoice)}
-            </p>
-          ) : null}
-          {saved ? null : choiceConfigFor(shown.id) ? (
-            <fieldset className="mt-4" disabled={saving}>
-              <legend className="text-sm font-black">{choiceConfigFor(shown.id)?.prompt}</legend>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {choiceConfigFor(shown.id)?.options.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={choice === option.value}
-                    onClick={() => setChoice(option.value)}
-                    className={`rounded-xl border px-4 py-2 text-sm font-bold ${
-                      choice === option.value
-                        ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white"
-                        : "border-[var(--brand-navy)]/30 bg-white"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          ) : null}
-
-          {saved ? null : saveEnabled ? (
-            <div className="mt-4">
-              <p className="text-sm font-semibold">Does this match the card in your hand?</p>
-              <button
-                type="button"
-                onClick={() => void save()}
-                disabled={saving || (choiceConfigFor(shown.id) !== null && !choice)}
-                className="mt-2 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white disabled:opacity-50"
-              >
-                {saving ? "Saving..." : "Yes, save this card"}
-              </button>
-            </div>
+          {saved && compactSavedCards ? (
+            <SavedCardSummary card={shown} pathwayId={pathwayId} />
           ) : (
-            <p className="mt-4 text-xs text-[var(--brand-navy)]/60">
-              Preview only. Saving this card is not available yet.
-            </p>
+            <>
+              <h2 className="text-2xl font-black">{shown.name}</h2>
+              <p className="mt-3 text-lg leading-relaxed">{shown.description}</p>
+              {shown.amount !== null ? <p className="mt-3 text-2xl font-black">{money(shown.amount)}</p> : null}
+              {shown.taxCategory ? (
+                <p className="mt-1 text-xs text-[var(--brand-navy)]/70">Tax category: {shown.taxCategory}</p>
+              ) : null}
+              {shown.educationMessage ? (
+                <p className="mt-3 text-sm text-[var(--brand-navy)]/75">{shown.educationMessage}</p>
+              ) : null}
+              {shown.playerChoiceRequired && !choiceConfigFor(shown.id) ? (
+                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                  This card needs a choice from you. Choices are not recorded yet, so only the card itself is saved.
+                </p>
+              ) : null}
+              {shown.triggersAudit ? (
+                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                  This card triggers an audit. Audit results will be handled in a later step; nothing is applied now.
+                </p>
+              ) : null}
+              {shown.roundRule || shown.pathwayRule ? (
+                <p className="mt-2 text-xs text-[var(--brand-navy)]/60">
+                  {shown.roundRule ? `Rounds: ${shown.roundRule}. ` : ""}
+                  {shown.pathwayRule && shown.pathwayRule !== "None" ? shown.pathwayRule : ""}
+                </p>
+              ) : null}
+              <p className="mt-3 font-mono text-[11px] text-[var(--brand-navy)]/50">
+                {shown.id} · {shown.category}
+                {shown.subcategory ? ` · ${shown.subcategory}` : ""}
+              </p>
+
+              {saved && shown.recordedChoice ? (
+                <p className="mt-3 text-sm font-black">
+                  Your choice: {choiceLabel(shown.id, shown.recordedChoice)}
+                </p>
+              ) : null}
+              {saved ? null : choiceConfigFor(shown.id) ? (
+                <fieldset className="mt-4" disabled={saving}>
+                  <legend className="text-sm font-black">{choiceConfigFor(shown.id)?.prompt}</legend>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {choiceConfigFor(shown.id)?.options.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={choice === option.value}
+                        onClick={() => setChoice(option.value)}
+                        className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                          choice === option.value
+                            ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white"
+                            : "border-[var(--brand-navy)]/30 bg-white"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+              {saved ? null : saveEnabled ? (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold">Does this match the card in your hand?</p>
+                  <button
+                    type="button"
+                    onClick={() => void save()}
+                    disabled={saving || (choiceConfigFor(shown.id) !== null && !choice)}
+                    className="mt-2 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Yes, save this card"}
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-4 text-xs text-[var(--brand-navy)]/60">
+                  Preview only. Saving this card is not available yet.
+                </p>
+              )}
+            </>
           )}
         </div>
       ) : null}

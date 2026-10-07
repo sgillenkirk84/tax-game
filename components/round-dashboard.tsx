@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import CardEntry from "@/components/card-entry";
 import RoundResults from "@/components/round-results";
+import SavedCardSummary from "@/components/saved-card-summary";
 import TaxCalculation from "@/components/tax-calculation";
 import TaxPrepayment from "@/components/tax-prepayment";
 import { type CardPreview, choiceLabel, expectedCategoryFor, isCardStage, stageInstructionsFor } from "@/lib/card-entry";
@@ -131,6 +132,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
   const stage = progress.currentStage;
   const currentIndex = flowIndex(stage);
   const target = advanceTarget(stage, round);
+  const resultsIndex = flowIndex("results-and-life-ledger");
   const cardsFor = (id: string) => progress.stages.find((entry) => entry.stage === id)?.cards ?? [];
   const completedNeedsNote = ACTIVE_ROUND_FLOW.some(
     (step, index) =>
@@ -142,13 +144,15 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
 
   return (
     <div className="mt-8">
-      <ol className="space-y-3" aria-label={postGame ? "Post-game review" : "Round stages"}>
+      <ol className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label={postGame ? "Post-game review" : "Round stages"}>
         {ACTIVE_ROUND_FLOW.map((step, index) => {
           const label = labelFor(step.id, step.label);
           if (index < currentIndex) {
             const cards = cardsFor(step.id);
+            const compactPhysicalStage =
+              step.kind === "cards" && step.id !== "tax-prepayment" && currentIndex < resultsIndex;
             return (
-              <li key={step.id} hidden={postGame} className="rounded-2xl border border-green-700/25 bg-green-50 p-4">
+              <li key={step.id} hidden={postGame} className={`rounded-2xl border border-green-700/25 bg-green-50 p-4 ${compactPhysicalStage ? "" : "sm:col-span-2"}`}>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-green-800">Completed · {label}</p>
                 {step.kind === "automatic" ? (
                   round >= 1 && round <= 5 ? (
@@ -157,23 +161,31 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                     <p className="mt-1 text-sm text-[var(--brand-navy)]/75">Calculated automatically.</p>
                   )
                 ) : null}
-                {cards.map((card, position) => (
-                  <div key={`${card.id}-${position}`} className="mt-2">
-                    <p className="text-sm font-black">{card.name}</p>
-                    <p className="text-base leading-snug">{card.description}</p>
-                    {card.amount !== null ? <p className="mt-1 text-lg font-black">{money(card.amount)}</p> : null}
-                    {card.recordedChoice ? (
-                      <p className="mt-1 text-sm font-black">Your choice: {choiceLabel(card.id, card.recordedChoice)}</p>
-                    ) : null}
-                    <p className="mt-1 font-mono text-[11px] text-[var(--brand-navy)]/50">{card.id}</p>
+                {compactPhysicalStage ? (
+                  <div className="mt-2 grid gap-2">
+                    {cards.map((card, position) => (
+                      <SavedCardSummary key={`${card.id}-${position}`} card={card} pathwayId={pathwayId} />
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  cards.map((card, position) => (
+                    <div key={`${card.id}-${position}`} className="mt-2">
+                      <p className="text-sm font-black">{card.name}</p>
+                      <p className="text-base leading-snug">{card.description}</p>
+                      {card.amount !== null ? <p className="mt-1 text-lg font-black">{money(card.amount)}</p> : null}
+                      {card.recordedChoice ? (
+                        <p className="mt-1 text-sm font-black">Your choice: {choiceLabel(card.id, card.recordedChoice)}</p>
+                      ) : null}
+                      <p className="mt-1 font-mono text-[11px] text-[var(--brand-navy)]/50">{card.id}</p>
+                    </div>
+                  ))
+                )}
               </li>
             );
           }
           if (index === currentIndex) {
             return (
-              <li key={step.id}>
+              <li key={step.id} className="sm:col-span-2">
                 {step.id === "tax-prepayment" && prepaymentEnabled ? (
                   <TaxPrepayment round={round} player={player} pathwayId={pathwayId} onFixedChange={setPrepaymentFixed} />
                 ) : step.id === "results-and-life-ledger" && resultsEnabled ? (
@@ -187,6 +199,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
                     expectedCategory={expectedCategoryFor(step.id, pathwayId, round)}
                     instructions={stageInstructionsFor(step.id, pathwayId, round)}
                     pathwayId={pathwayId}
+                    compactSavedCards={step.id !== "tax-prepayment"}
                     onSavedChange={setCurrentSaved}
                     hideStandardDeductionNote={completedNeedsNote}
                   />
@@ -253,7 +266,7 @@ export default function RoundDashboard({ round, pathwayId, player, onRoundStarte
           return (
             <li
               key={step.id}
-              className="flex items-center justify-between rounded-xl border border-dashed border-[var(--brand-navy)]/25 px-4 py-2 text-sm text-[var(--brand-navy)]/55"
+              className="col-span-full flex items-center justify-between rounded-xl border border-dashed border-[var(--brand-navy)]/25 px-4 py-2 text-sm text-[var(--brand-navy)]/55"
             >
               <span className="font-bold">{label}</span>
               <span className="text-xs uppercase tracking-[0.15em]">Locked</span>

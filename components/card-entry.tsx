@@ -220,7 +220,7 @@ export default function CardEntry({
       ) : null}
 
       {shown ? (
-        <div className="mt-4 rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-5">
+        <div className="mt-4 rounded-2xl border-2 border-[var(--brand-gold)] bg-[var(--brand-gold)]/10 p-4 sm:p-5">
           {saved && !compactSavedCards ? (
             <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
               Card saved. This is the card recorded for this stage.
@@ -235,21 +235,21 @@ export default function CardEntry({
           ) : (
             <>
               <h2 className="text-2xl font-black">{shown.name}</h2>
-              <p className="mt-3 text-lg leading-relaxed">{shown.description}</p>
-              {shown.amount !== null ? <p className="mt-3 text-2xl font-black">{money(shown.amount)}</p> : null}
+              <p className="mt-2 text-lg leading-relaxed">{shown.description}</p>
+              {shown.amount !== null ? <p className="mt-2 text-2xl font-black">{money(shown.amount)}</p> : null}
               {shown.taxCategory ? (
                 <p className="mt-1 text-xs text-[var(--brand-navy)]/70">Tax category: {shown.taxCategory}</p>
               ) : null}
               {shown.educationMessage ? (
-                <p className="mt-3 text-sm text-[var(--brand-navy)]/75">{shown.educationMessage}</p>
+                <p className="mt-2 text-sm text-[var(--brand-navy)]/75">{shown.educationMessage}</p>
               ) : null}
               {shown.playerChoiceRequired && !choiceConfigFor(shown.id) ? (
-                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                   This card needs a choice from you. Choices are not recorded yet, so only the card itself is saved.
                 </p>
               ) : null}
               {shown.triggersAudit ? (
-                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                   This card triggers an audit. Audit results will be handled in a later step; nothing is applied now.
                 </p>
               ) : null}
@@ -270,7 +270,7 @@ export default function CardEntry({
                 </p>
               ) : null}
               {saved ? null : choiceConfigFor(shown.id) ? (
-                <fieldset className="mt-4" disabled={saving}>
+                <fieldset className="mt-3" disabled={saving}>
                   <legend className="text-sm font-black">{choiceConfigFor(shown.id)?.prompt}</legend>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {choiceConfigFor(shown.id)?.options.map((option) => (
@@ -279,7 +279,7 @@ export default function CardEntry({
                         type="button"
                         aria-pressed={choice === option.value}
                         onClick={() => setChoice(option.value)}
-                        className={`rounded-xl border px-4 py-2 text-sm font-bold ${
+                        className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-bold ${
                           choice === option.value
                             ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white"
                             : "border-[var(--brand-navy)]/30 bg-white"
@@ -292,15 +292,15 @@ export default function CardEntry({
                 </fieldset>
               ) : null}
               {saved ? null : saveEnabled ? (
-                <div className="mt-4">
+                <div className="mt-3 space-y-2">
                   <p className="text-sm font-semibold">Does this match the card in your hand?</p>
                   <button
                     type="button"
                     onClick={() => void save()}
                     disabled={saving || (choiceConfigFor(shown.id) !== null && !choice)}
-                    className="mt-2 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white disabled:opacity-50"
+                    className="min-h-12 w-full rounded-xl bg-[var(--brand-navy)] px-6 py-3.5 font-bold text-white disabled:opacity-50 sm:w-auto"
                   >
-                    {saving ? "Saving..." : "Yes, save this card"}
+                    {saving ? "Saving..." : "Save This Card"}
                   </button>
                 </div>
               ) : (

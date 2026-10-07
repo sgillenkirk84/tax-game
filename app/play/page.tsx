@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 
 type PlayerSession = {
   id: string;
@@ -16,7 +17,7 @@ const PLAYER_STORAGE_KEY = "my-tax-life-player";
 
 export default function PlayPage() {
   const router = useRouter();
-  const [sessionCode, setSessionCode] = useState("");
+  const [sessionCode, setSessionCode] = useState("HZL625");
   const [displayName, setDisplayName] = useState("");
   const [message, setMessage] = useState("");
   const [joined, setJoined] = useState(false);
@@ -84,14 +85,15 @@ export default function PlayPage() {
         </div>
 
         <div className="rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-8 shadow-[0_20px_50px_rgba(15,29,82,0.08)] sm:p-10">
+          <h1 className="mb-6 text-3xl font-black text-[var(--brand-navy)] sm:text-4xl">{PRODUCT_NAME}</h1>
           <p className="mb-3 text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
             Student Access
           </p>
 
-          <h1 className="text-3xl font-black text-[var(--brand-navy)] sm:text-4xl">Join a Session</h1>
+          <h2 className="text-2xl font-black text-[var(--brand-navy)] sm:text-3xl">Join a Session</h2>
 
           <p className="mt-3 text-[var(--brand-navy)]/75">
-            Enter the session code provided by your teacher, then add your name or initials to join.
+            Enter the session code provided by your teacher to join.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -124,16 +126,19 @@ export default function PlayPage() {
 
             <div>
               <label htmlFor="displayName" className="mb-2 block text-sm font-bold text-[var(--brand-navy)]">
-                Display Name or Initials
+                Player Name
               </label>
               <input
                 id="displayName"
                 type="text"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Enter your name or initials"
+                placeholder="Enter initials, first name, or nickname"
                 className="w-full rounded-xl border border-[var(--brand-navy)]/30 bg-[var(--brand-ivory)] px-4 py-3 text-[var(--brand-navy)] outline-none transition focus:border-[var(--brand-gold)] focus:ring-2 focus:ring-[var(--brand-gold)]/40"
               />
+              <p className="mt-2 text-sm text-[var(--brand-navy)]/75">
+                For this beta, use your initials, first name, or nickname.
+              </p>
             </div>
 
             <button

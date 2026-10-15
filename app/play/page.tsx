@@ -17,7 +17,7 @@ const PLAYER_STORAGE_KEY = "my-tax-life-player";
 
 export default function PlayPage() {
   const router = useRouter();
-  const [sessionCode, setSessionCode] = useState("HZL625");
+  const [sessionCode, setSessionCode] = useState("ZDP493");
   const [displayName, setDisplayName] = useState("");
   const [message, setMessage] = useState("");
   const [joined, setJoined] = useState(false);

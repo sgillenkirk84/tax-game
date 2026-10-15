@@ -94,6 +94,11 @@ export async function POST(request: Request) {
       totalRounds: 5,
       startingCash: Number(current.beginning_cash_resources),
       startingStudentLoanDebt: Number(current.beginning_student_loan_debt),
+      initialScenario: {
+        scenarioId: row.starting_decision_id,
+        startingCash: Number(row.beginning_cash_resources),
+        startingStudentLoanDebt: Number(row.beginning_student_loan_debt),
+      },
     });
   } catch {
     return Response.json({ error: "Could not reach student progress storage." }, { status: 503 });

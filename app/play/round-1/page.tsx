@@ -4,6 +4,7 @@ import Link from "next/link";
 import RoundDashboard from "@/components/round-dashboard";
 import { roundHeading } from "@/lib/card-entry";
 import { PRODUCT_NAME } from "@/lib/site-branding";
+import { startingScenarios } from "@/lib/starting-scenario";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
 type RoundOne = {
@@ -29,20 +30,7 @@ const pathwayNames: Record<string, string> = {
   "PATH-008": "Early Retiree",
 };
 
-const scenarios: Record<string, { name: string; description: string }> = {
-  "financial-head-start": {
-    name: "Financial Head Start",
-    description: "You begin your life with a cash cushion and no student debt.",
-  },
-  "starting-from-scratch": {
-    name: "Starting From Scratch",
-    description: "You begin with no extra cash and no student debt.",
-  },
-  "student-loan-debt": {
-    name: "Student Debt",
-    description: "You begin with no extra cash and student debt to pay down.",
-  },
-};
+const scenarios: Record<string, { name: string; description: string }> = startingScenarios;
 
 const money = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });

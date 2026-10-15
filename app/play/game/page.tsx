@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { PRODUCT_NAME } from "@/lib/site-branding";
+import { readStartingScenario, startingScenarios, type StartingScenario } from "@/lib/starting-scenario";
 
 type PlayerSession = {
   id?: string;
@@ -41,12 +42,6 @@ type RolePathway = {
   resultMessage: string;
   graphic: string;
   developerNotes: string;
-};
-
-type GameChoice = {
-  id: string;
-  label: string;
-  summary: string;
 };
 
 const PLAYER_STORAGE_KEY = "my-tax-life-player";
@@ -175,23 +170,30 @@ const rolePathways: RolePathway[] = [
   },
 ];
 
-const roleChoiceScenarios: GameChoice[] = [
-  {
-    id: "take-opportunity",
-    label: "Take the opportunity",
-    summary: "Lean into your role's advantage and accept the financial tradeoff that comes with it.",
-  },
-  {
-    id: "play-safe",
-    label: "Play it safe",
-    summary: "Keep the simpler path and focus on lower risk with steadier, more predictable financial outcomes.",
-  },
-  {
-    id: "adapt-quickly",
-    label: "Adapt quickly",
-    summary: "Remain flexible and respond to changing life events without locking into one strategy too early.",
-  },
-];
+const legacyDecisionIds = ["take-opportunity", "play-safe", "adapt-quickly"];
+const money = (value: number) =>
+  value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+async function loadStartingScenario(player: PlayerSession) {
+  const response = await fetch("/api/rounds/one", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: player.id, resumeToken: player.resumeToken }),
+  });
+  const result = (await response.json()) as {
+    initialScenario?: unknown;
+    roundNumber?: number;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(result.error ?? "Could not reveal your saved starting scenario. Try again.");
+  }
+  if (!Number.isInteger(result.roundNumber) || result.roundNumber === undefined ||
+    result.roundNumber < 1 || result.roundNumber > 5) {
+    throw new Error("The saved round is invalid. Please contact your teacher.");
+  }
+  return { scenario: readStartingScenario(result.initialScenario), roundNumber: result.roundNumber };
+}
 
 async function readSavedSetup(player: PlayerSession): Promise<SavedSetup> {
   const response = await fetch("/api/students/setup", {
@@ -206,7 +208,7 @@ async function readSavedSetup(player: PlayerSession): Promise<SavedSetup> {
   if (
     (result.pathwayId !== null && !rolePathways.some((role) => role.id === result.pathwayId)) ||
     (result.startingDecisionId !== null &&
-      !roleChoiceScenarios.some((choice) => choice.id === result.startingDecisionId)) ||
+      !legacyDecisionIds.includes(result.startingDecisionId)) ||
     (result.status !== "joined" && result.status !== "playing")
   ) {
     throw new Error("Saved setup data is invalid. Please contact your teacher.");
@@ -239,7 +241,7 @@ async function saveSetup(
   if (
     (result.pathwayId !== null && !rolePathways.some((role) => role.id === result.pathwayId)) ||
     (result.startingDecisionId !== null &&
-      !roleChoiceScenarios.some((choice) => choice.id === result.startingDecisionId)) ||
+      !legacyDecisionIds.includes(result.startingDecisionId)) ||
     (result.status !== "joined" && result.status !== "playing")
   ) {
     throw new Error("Saved setup data is invalid. Please contact your teacher.");
@@ -259,8 +261,11 @@ export default function StudentGamePage() {
   const [legacyPlayer, setLegacyPlayer] = useState(false);
   const [hasSelectedRole, setHasSelectedRole] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState("PATH-001");
-  const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
   const [readyForNextStep, setReadyForNextStep] = useState(false);
+  const [startingScenario, setStartingScenario] = useState<StartingScenario | null>(null);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
+  const roundEnabled = process.env.NEXT_PUBLIC_ROUND_ONE_ENABLED === "true";
   const setupActionInProgress = useRef(false);
 
   useEffect(() => {
@@ -329,10 +334,25 @@ export default function StudentGamePage() {
           if (savedSetup.pathwayId) {
             setSelectedRoleId(savedSetup.pathwayId);
           }
-          setSelectedChoice(savedSetup.startingDecisionId);
           setReadyForNextStep(savedSetup.status === "playing");
           setSetupLoading(false);
         });
+        if (savedSetup.status === "playing" && roundEnabled) {
+          setSetupSaving(true);
+          try {
+            const saved = await loadStartingScenario(parsedPlayer);
+            if (!cancelled) {
+              setStartingScenario(saved.scenario);
+              setCurrentRound(saved.roundNumber);
+            }
+          } catch (error) {
+            if (!cancelled) {
+              setScenarioError(error instanceof Error ? error.message : "Could not load your starting scenario.");
+            }
+          } finally {
+            if (!cancelled) setSetupSaving(false);
+          }
+        }
       } catch (error) {
         if (!cancelled) {
           startTransition(() => {
@@ -347,7 +367,7 @@ export default function StudentGamePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [roundEnabled]);
 
   const selectedRole = rolePathways.find((role) => role.id === selectedRoleId) ?? rolePathways[0];
   function handleReset() {
@@ -360,7 +380,6 @@ export default function StudentGamePage() {
     if (setup.pathwayId) {
       setSelectedRoleId(setup.pathwayId);
     }
-    setSelectedChoice(setup.startingDecisionId);
     setReadyForNextStep(setup.status === "playing");
   }
 
@@ -404,7 +423,6 @@ export default function StudentGamePage() {
 
       setSelectedRoleId(roleId);
       setHasSelectedRole(true);
-      setSelectedChoice(null);
       setReadyForNextStep(false);
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Could not save the selected role.");
@@ -414,61 +432,32 @@ export default function StudentGamePage() {
     }
   }
 
-  async function drawStartingDecisionCard() {
-    if (!hasSelectedRole || selectedChoice || setupActionInProgress.current) {
-      return;
-    }
-
-    const randomIndex = Math.floor(Math.random() * roleChoiceScenarios.length);
-    const drawnChoice = roleChoiceScenarios[randomIndex];
-    setupActionInProgress.current = true;
-    setSetupSaving(true);
-    setSetupError(null);
-    try {
-      if (persistenceEnabled && player) {
-        const savedSetup = await saveSetup(player, {
-          pathwayId: selectedRoleId,
-          startingDecisionId: drawnChoice.id,
-          setupComplete: false,
-        });
-        if (savedSetup.startingDecisionId !== drawnChoice.id) {
-          throw new Error("The starting decision could not be confirmed as saved.");
-        }
-      }
-
-      setSelectedChoice(drawnChoice.id);
-      setReadyForNextStep(false);
-    } catch (error) {
-      setSetupError(error instanceof Error ? error.message : "Could not save the starting decision.");
-    } finally {
-      setupActionInProgress.current = false;
-      setSetupSaving(false);
-    }
-  }
-
-  async function continueToNextStep() {
-    if (!selectedChoice || setupActionInProgress.current || readyForNextStep) {
+  async function revealStartingScenario() {
+    if (!hasSelectedRole || !persistenceEnabled || !player || !roundEnabled ||
+      startingScenario || setupActionInProgress.current) {
       return;
     }
 
     setupActionInProgress.current = true;
     setSetupSaving(true);
-    setSetupError(null);
+    setScenarioError(null);
     try {
-      if (persistenceEnabled && player) {
+      if (!readyForNextStep) {
         const savedSetup = await saveSetup(player, {
           pathwayId: selectedRoleId,
-          startingDecisionId: selectedChoice,
+          startingDecisionId: null,
           setupComplete: true,
         });
-        if (savedSetup.status !== "playing") {
+        if (savedSetup.status !== "playing" || savedSetup.pathwayId !== selectedRoleId) {
           throw new Error("Setup completion could not be confirmed as saved.");
         }
+        setReadyForNextStep(true);
       }
-
-      setReadyForNextStep(true);
+      const saved = await loadStartingScenario(player);
+      setStartingScenario(saved.scenario);
+      setCurrentRound(saved.roundNumber);
     } catch (error) {
-      setSetupError(error instanceof Error ? error.message : "Could not save setup completion.");
+      setScenarioError(error instanceof Error ? error.message : "Could not reveal your starting scenario. Try again.");
     } finally {
       setupActionInProgress.current = false;
       setSetupSaving(false);
@@ -552,7 +541,7 @@ export default function StudentGamePage() {
         ) : null}
 
         <section className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
-          <div className="rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-7 shadow-[0_20px_50px_rgba(15,29,82,0.08)]">
+          <div className="min-w-0 rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-7 shadow-[0_20px_50px_rgba(15,29,82,0.08)]">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
@@ -576,7 +565,7 @@ export default function StudentGamePage() {
                 </p>
                 <h3 className="mt-3 text-3xl font-black">Choose the role card you physically drew</h3>
                 <p className="mt-4 text-base leading-relaxed text-[var(--brand-navy)]/80">
-                  Draw a physical Pathway / role card, then select its matching role below. Next, reveal your one-time starting decision in the app and complete setup before starting Round 1.
+                  Draw a physical Pathway / role card, then select its matching role below. Reveal your starting scenario to see your starting cash and student debt, then start Round 1.
                 </p>
 
                 <div className="mt-6 grid gap-4">
@@ -604,12 +593,12 @@ export default function StudentGamePage() {
             ) : (
               <div className="mt-8 space-y-6">
                 <div className="rounded-2xl border border-[var(--brand-navy)]/10 bg-[var(--brand-ivory)] p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
                         Drawn Role Card
                       </p>
-                      <h3 className="mt-2 text-3xl font-black">{selectedRole.name}</h3>
+                      <h3 className="mt-2 break-words text-3xl font-black">{selectedRole.name}</h3>
                     </div>
                     <span className="rounded-full bg-[var(--brand-navy)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-white">
                       {selectedRole.id}
@@ -666,111 +655,52 @@ export default function StudentGamePage() {
 
                 <div className="rounded-2xl border border-[var(--brand-navy)]/10 bg-white p-5">
                   <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-                    Step 2: In-app starting decision
+                    Step 2: Your starting scenario
                   </p>
-                  <h4 className="mt-3 text-2xl font-black">Reveal your one-time starting decision</h4>
                   <p className="mt-3 text-sm leading-relaxed text-[var(--brand-navy)]/75">
-                    The app randomly reveals this decision; do not draw a physical card or roll for it.
-                    This is separate from your financial starting scenario, which the game assigns when you start Round 1.
+                    The game assigns and saves your financial starting scenario. Do not draw a physical card or roll for it. Refreshing or trying again keeps the same saved scenario.
                   </p>
 
-                  {!selectedChoice ? (
+                  {scenarioError ? <p role="alert" className="mt-3 text-sm text-red-800">{scenarioError}</p> : null}
+                  {!roundEnabled ? <p className="mt-3 text-sm">Starting scenarios and Round 1 are not available yet.</p> : null}
+                  {!startingScenario ? (
                     <div className="mt-5">
                       <button
                         type="button"
-                        onClick={drawStartingDecisionCard}
-                        disabled={setupSaving}
+                        onClick={() => void revealStartingScenario()}
+                        disabled={setupSaving || !persistenceEnabled || !roundEnabled}
                         className="rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
                       >
-                        {setupSaving ? "Saving..." : "Reveal Starting Decision"}
+                        {setupSaving ? "Loading saved scenario..." : "Reveal Starting Scenario"}
                       </button>
                     </div>
                   ) : (
                     <div className="mt-5">
-                      {(() => {
-                        const choice = roleChoiceScenarios.find((item) => item.id === selectedChoice);
-                        if (!choice) {
-                          return null;
-                        }
-
-                        return (
-                          <div className="rounded-2xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-5">
-                            <div className="flex items-start justify-between gap-4">
-                              <div>
-                                <div className="text-xl font-black text-[var(--brand-navy)]">{choice.label}</div>
-                                <div className="mt-2 text-sm leading-relaxed text-[var(--brand-navy)]/75">
-                                  {choice.summary}
-                                </div>
-                              </div>
-
-                              <div className="text-sm leading-relaxed text-[var(--brand-navy)]/75">
-                                <p className="font-bold">Starting Cash / Student Debt</p>
-                                <p className="mt-2">Starting cash and student debt are assigned when you begin Round 1, not by this decision.</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {!readyForNextStep ? (
-                        <div className="mt-6 flex flex-wrap gap-4">
-                          <button
-                            type="button"
-                            onClick={continueToNextStep}
-                            disabled={setupSaving}
-                            className="rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
-                          >
-                            {setupSaving ? "Saving..." : "Complete Setup"}
-                          </button>
+                      <div data-testid="starting-scenario" className="grid gap-4 rounded-2xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-4 sm:grid-cols-2">
+                        <div className="min-w-0">
+                          <h4 className="text-xl font-black">{startingScenarios[startingScenario.scenarioId].name}</h4>
+                          <p className="mt-2 text-sm leading-relaxed">{startingScenarios[startingScenario.scenarioId].description}</p>
                         </div>
-                      ) : null}
+                        <dl className="space-y-2 text-sm">
+                          <div><dt className="font-bold">Starting Cash</dt><dd>{money(startingScenario.startingCash)}</dd></div>
+                          <div><dt className="font-bold">Student Debt</dt><dd>{money(startingScenario.startingStudentLoanDebt)}</dd></div>
+                        </dl>
+                      </div>
+                      <Link
+                        href="/play/round-1"
+                        className="mt-4 inline-flex rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
+                      >
+                        {currentRound === 1 ? "Start Round 1" : `Resume Round ${currentRound}`}
+                      </Link>
                     </div>
                   )}
 
                 </div>
-
-                {readyForNextStep ? (
-                  <div className="rounded-2xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-4 text-sm font-semibold text-[var(--brand-navy)]">
-                    Setup complete. Choose Start Round 1 when available. The game will show your assigned financial starting scenario, starting cash and student debt. Then begin drawing physical gameplay cards.
-                    {process.env.NEXT_PUBLIC_ROUND_ONE_ENABLED === "true" ? (
-                      <Link
-                        href="/play/round-1"
-                        className="mt-4 flex w-fit rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
-                      >
-                        Start Round 1
-                      </Link>
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
             )}
           </div>
 
-          <aside className="space-y-6">
-            <div className="rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-6 shadow-[0_20px_50px_rgba(15,29,82,0.08)]">
-              <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-                Your starting finances
-              </p>
-              <p className="mt-3 text-sm text-[var(--brand-navy)]/75">
-                Your starting decision does not set your Round 1 balances. Complete setup, then start Round 1 to see your assigned financial starting scenario and actual amounts.
-              </p>
-
-              <div className="mt-5 space-y-4 text-sm text-[var(--brand-navy)]/80">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--brand-navy)]/10 pb-2">
-                  <span>Starting Cash</span>
-                  <strong>Assigned in Round 1</strong>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--brand-navy)]/10 pb-2">
-                  <span>Student Debt</span>
-                  <strong>Assigned in Round 1</strong>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-3 text-sm font-semibold text-[var(--brand-navy)]">
-                After starting Round 1, check your starting cash and student debt, then begin drawing physical gameplay cards.
-              </div>
-            </div>
-
+          <aside className="min-w-0 space-y-6">
             <div className="rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-6 shadow-[0_20px_50px_rgba(15,29,82,0.08)]">
               <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
                 Role Notes

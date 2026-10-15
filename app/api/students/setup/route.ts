@@ -68,7 +68,7 @@ function handleSetupError(error: { code?: string; message: string }, operation: 
     return Response.json({ error: "This starting choice has already been saved." }, { status: 409 });
   }
   if (error.message.includes("SETUP_INCOMPLETE")) {
-    return Response.json({ error: "Choose a role and draw a starting decision before continuing." }, { status: 400 });
+    return Response.json({ error: "Choose your Pathway before revealing your starting scenario." }, { status: 400 });
   }
   if (error.code === "PGRST202" || error.code === "42883") {
     return Response.json({ error: "Student progress storage is not ready yet." }, { status: 503 });

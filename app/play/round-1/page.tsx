@@ -3,6 +3,7 @@
 import Link from "next/link";
 import RoundDashboard from "@/components/round-dashboard";
 import { roundHeading } from "@/lib/card-entry";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
 type RoundOne = {
@@ -31,15 +32,15 @@ const pathwayNames: Record<string, string> = {
 const scenarios: Record<string, { name: string; description: string }> = {
   "financial-head-start": {
     name: "Financial Head Start",
-    description: "You begin your life with a cash cushion and no student-loan debt.",
+    description: "You begin your life with a cash cushion and no student debt.",
   },
   "starting-from-scratch": {
     name: "Starting From Scratch",
-    description: "You begin with no extra cash and no student-loan debt.",
+    description: "You begin with no extra cash and no student debt.",
   },
   "student-loan-debt": {
-    name: "Student Loan Debt",
-    description: "You begin with no extra cash and a student loan to pay down.",
+    name: "Student Debt",
+    description: "You begin with no extra cash and student debt to pay down.",
   },
 };
 
@@ -163,7 +164,7 @@ export default function RoundOnePage() {
     <Shell>
       <div hidden={postGame && round.roundNumber === 5}>
       <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-        Round {round.roundNumber} of {round.totalRounds}
+        {PRODUCT_NAME} · Round {round.roundNumber} of {round.totalRounds}
       </p>
       <h1 className="mt-3 text-3xl font-black">{roundHeading(round.roundNumber)}</h1>
       <dl className="mt-6 space-y-4">
@@ -185,7 +186,7 @@ export default function RoundOnePage() {
           </div>
           <div className="rounded-2xl border border-[var(--brand-navy)]/15 p-4">
             <dt className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">
-              {round.roundNumber === 1 ? "Starting student-loan debt" : "Beginning student-loan debt"}
+              {round.roundNumber === 1 ? "Starting student debt" : "Beginning student debt"}
             </dt>
             <dd className="mt-1 text-2xl font-black">{money(round.startingStudentLoanDebt)}</dd>
           </div>

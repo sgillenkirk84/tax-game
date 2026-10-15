@@ -351,7 +351,7 @@ test("only finalized Round 5 opens a separate recap; Results and five-column led
   assert.match(normal, /Round \{results.roundNumber\} Results/);
   assert.match(normal, /<LifeLedger current=\{results\} history=\{history\}/);
   assert.match(normal, /results.roundNumber < MAX_PLAYABLE_ROUND \? \([\s\S]*<LifeLedger/);
-  assert.match(normal, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*onClick=\{\(\) => changeView\("highlights"\)\}[\s\S]*View My Tax Life Recap[\s\S]*nextEnabled/);
+  assert.match(normal, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*onClick=\{\(\) => changeView\("highlights"\)\}[\s\S]*View \{PRODUCT_NAME\} Recap[\s\S]*nextEnabled/);
   assert.match(normal, /onClick=\{\(\) => void startNext\(\)\}[\s\S]*Start Round \$\{nextRound\}/);
   assert.match(owner, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
   assert.doesNotMatch(normal, /Start Round 6|Continue to Round 6|>Next Round</);
@@ -376,7 +376,7 @@ test("recap navigation and refresh use only local view state; shared history sur
 test("terminal ledger is a separate shared-history post-game view with direct back paths", () => {
   const owner = read("../components/round-results.tsx");
   const ledger = owner.slice(owner.indexOf('if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "ledger")'), owner.indexOf("const taxResult ="));
-  assert.match(ledger, /My Tax Life &mdash; Full Life Ledger/);
+  assert.match(ledger, /\{PRODUCT_NAME\} &mdash; Full Life Ledger/);
   assert.match(ledger, /<LifeLedger current=\{results\} history=\{history\} onRetry=\{retryHistory\}/);
   assert.match(ledger, /changeView\("highlights"\)[\s\S]*Back to Highlight Reel/);
   assert.match(ledger, /changeView\("results"\)[\s\S]*Back to Round 5 Results/);
@@ -386,7 +386,7 @@ test("terminal ledger is a separate shared-history post-game view with direct ba
   assert.match(owner, /onViewLedger=\{\(\) => changeView\("ledger"\)\}/);
   assert.match(owner, /ledgerHeading.current\?\.focus\(\)/);
   const normal = owner.slice(owner.indexOf("const taxResult ="));
-  assert.equal(normal.split("View My Tax Life Recap").length - 1, 1);
+  assert.equal(normal.split("View {PRODUCT_NAME} Recap").length - 1, 1);
 });
 
 test("post-game hides dashboard cards and opening information without remounting Results or altering prior rounds", () => {
@@ -415,7 +415,7 @@ test("recap history errors and loading preserve completion with retry and uncond
   assert.match(owner, /const recap = history.loading \? null : history.error[\s\S]*ok: false[\s\S]*buildHighlightReel/);
   assert.match(owner, /function retryHistory\(\)[\s\S]*setHistory\(\(previous\) => \(\{ \.\.\.previous, loading: true, error: "" \}\)\)[\s\S]*setHistoryRetry/);
   const ui = read("../components/highlight-reel.tsx");
-  assert.match(ui, /<h2[^>]*id="highlight-reel-heading"[^>]*>My Tax Life &mdash; Highlight Reel/);
+  assert.match(ui, /<h2[^>]*id="highlight-reel-heading"[^>]*>\{PRODUCT_NAME\} &mdash; Highlight Reel/);
   assert.match(ui, /Your game is finalized\. Loading/);
   assert.match(ui, /Your game remains finalized/);
   assert.match(ui, /onClick=\{onRetry\}>Try loading history again/);

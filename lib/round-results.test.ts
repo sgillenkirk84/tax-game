@@ -142,7 +142,7 @@ test("Round 5 completion is displayed only after saved Results, with no next rou
   assert.ok(ui.indexOf("if (!results)") < ui.indexOf("results.roundNumber === MAX_PLAYABLE_ROUND"));
   assert.match(ui, /if \(body.finalized && body.results\)/);
   assert.match(ui, /results.roundNumber === MAX_PLAYABLE_ROUND[\s\S]*five-round financial game is complete[\s\S]*There is no next round/);
-  assert.match(ui, /My Tax Life Story is not available yet/);
+  assert.match(ui, /An AI-generated story is not available yet/);
   assert.match(ui, /nextRound <= MAX_PLAYABLE_ROUND && nextRound <= clientMaxEnabledRound\(\)/);
   assert.match(ui, /getRoundIncomeCardCategory\(results.pathwayId, results.roundNumber\)/);
   assert.doesNotMatch(ui, /\/api\/.*(?:story|ai)|generateStory|calculateRetirementIncome|calculatePrepaymentDollars/);

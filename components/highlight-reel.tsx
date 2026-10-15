@@ -1,5 +1,6 @@
 import type { HighlightResult } from "@/lib/highlight-reel";
 import type { Ref } from "react";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 
 export default function HighlightReel({ result, loading, onRetry, onBack, onViewLedger, headingRef }: {
   result: HighlightResult | null;
@@ -11,7 +12,7 @@ export default function HighlightReel({ result, loading, onRetry, onBack, onView
 }) {
   return (
     <section aria-labelledby="highlight-reel-heading" className="mb-6 rounded-2xl bg-[var(--brand-navy)]/5 p-4">
-      <h2 ref={headingRef} tabIndex={-1} id="highlight-reel-heading" className="text-2xl font-black">My Tax Life &mdash; Highlight Reel</h2>
+      <h2 ref={headingRef} tabIndex={-1} id="highlight-reel-heading" className="text-2xl font-black">{PRODUCT_NAME} &mdash; Highlight Reel</h2>
       <p className="mt-2 text-sm">A factual recap of your saved simulated life, not a score.</p>
       {loading ? (
         <p role="status" className="mt-3 text-sm">Your game is finalized. Loading saved history for your recap...</p>

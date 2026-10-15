@@ -1,6 +1,6 @@
-# Money Moves
+# The Ledger Draw™
 
-Money Moves is an educational financial literacy simulation game for students
+The Ledger Draw™ is an educational financial literacy simulation game for students
 and classrooms. Players explore how income, family, housing, deductions,
 investments, taxes, and retirement can shape a financial journey.
 
@@ -8,8 +8,21 @@ investments, taxes, and retirement can shape a financial journey.
 
 Select the physical Pathway/role card, reveal the one-time in-app starting
 decision, and complete setup. Starting Round 1 separately assigns the financial
-starting scenario and beginning cash/debt; the setup preview is not the saved
-round balance or calculated tax.
+starting scenario, starting cash and student debt. The starting-decision card
+and setup sidebar explain that assignment happens in Round 1; they do not show
+illustrative Income/Tax/Save adjustments or derive balances from that decision.
+Round 1 displays the actual server-returned cash and student debt.
+
+The starting-decision options remain Take the opportunity, Play it safe and
+Adapt quickly, with unchanged random selection and saved IDs. Independently,
+Round 1 assigns Financial Head Start ($10,000 cash / $0 student debt), Starting
+From Scratch ($0 / $0), or Student Debt ($0 / $20,000). Resuming an existing
+game preserves its assigned scenario and progress.
+
+Public pages, metadata, disclaimers and recap/ledger views use The Ledger Draw™.
+Legacy storage keys, database/RPC/API names and deployment identifiers are
+unchanged for compatibility. Imported workbook source/provenance retains its
+historical feature names; it is not student-facing UI.
 
 Gameplay still records physical draws, not computer-generated gameplay cards.
 Students select the matching card on screen, save the required card(s), and
@@ -380,7 +393,7 @@ saved Early Retiree prior package. Existing signatures, restricted grants, locks
 idempotency and finalized history are preserved. No schema or history rewrite occurs.
 
 After saved Tax Calculation, Round 5 stops. Tax Prepayment, Results/Life Ledger,
-final completion and My Tax Life Story remain closed in application/database code.
+final completion and the AI-generated story remain closed in application/database code.
 Hard maximum 5, unset/empty default 4, and both rollout gates are unchanged.
 This task executes no SQL and changes no environment variables; no commit,
 push or deployment is performed.
@@ -419,7 +432,7 @@ Corporate Climber's keep action from Rounds 1-4 to 1-5. It preserves existing
 signatures, permissions, locks, saved-tax prerequisites and idempotency.
 The shared payment helper and recovery RPC are unchanged.
 
-Round 5 Results/finalization and final completion/My Tax Life Story stay closed.
+Round 5 Results/finalization and final completion/AI-generated story stay closed.
 The fixed-payment screen does not calculate a settlement preview while Results
 is closed; Rounds 1-4 retain their existing preview. No settlement, Living Costs,
 ending cash, Round 5 ledger snapshot or final Audit resolution is applied.
@@ -433,7 +446,7 @@ TASK 10.15.38 publication history: the user manually installed
 Production before publication. Publication records the exact validated migration
 without reinstallation, SQL execution, environment changes or manual deployment.
 Round 5 Tax Prepayment remains locally validated, not yet browser/live-verified;
-Results/finalization and final completion/My Tax Life Story remain closed.
+Results/finalization and final completion/AI-generated story remain closed.
 
 ## Round 5 Results and final Life Ledger (TASK 10.15.39)
 
@@ -469,7 +482,7 @@ five-round financial-game completion boundary. The UI confirms that Results and
 Life Ledger are saved and that there is no next round. Database life status
 remains unchanged; this is not a new database `completed` lifecycle transition.
 Existing hard maximum 5, configured rollout limits and feature flags remain in
-force. My Tax Life Story, AI generation and Round 6 are not implemented/enabled.
+force. The AI-generated story, AI generation and Round 6 are not implemented/enabled.
 Round 5 Results and full five-round financial completion are locally validated,
 not yet live-verified. This task executes no SQL and performs no commit, push,
 deployment or environment change.
@@ -481,16 +494,16 @@ installed; no SQL execution, reinstallation, Supabase modification, environment
 change or manual deployment is performed. Round 5 Results/final Life Ledger
 and full five-round financial completion remain locally validated, not yet
 browser/live-verified. Finalized Round 5 remains the application completion
-boundary with database life status unchanged. My Tax Life Story remains
+boundary with database life status unchanged. The AI-generated story remains
 unimplemented and Round 6 remains unavailable.
 
 ## Deterministic Highlight Reel v1 (TASK 10.15.42)
 
 The user has live-verified the complete five-round financial game, including
 Round 5 Results, immutable snapshot, Life Ledger and the final completion
-boundary. The new locally implemented My Tax Life - Highlight Reel is a read-only
+boundary. The new locally implemented The Ledger Draw™ - Highlight Reel is a read-only
 interpretation of the same authenticated finalized Results summaries loaded for
-the Life Ledger. It is not My Tax Life Story and makes no AI/model calls.
+the Life Ledger. It is not an AI-generated story and makes no AI/model calls.
 
 After Round 5 Results, the recap precedes the unchanged five-column Life Ledger.
 It validates five unique, ordered, consistent rounds and uses saved values/card
@@ -536,7 +549,7 @@ validated, not yet published or Production/live-verified.
 ## Final-round to post-game boundary (TASK 10.15.46)
 
 This locally validated presentation change ends saved Round 5 Results with one
-View My Tax Life Recap action. Neither the Highlight Reel nor the full Life Ledger
+View The Ledger Draw™ Recap action. Neither the Highlight Reel nor the full Life Ledger
 is inline under final-round Results. The separate recap offers View Full Life
 Ledger; that separate post-game view offers Back to Highlight Reel and Back to
 Round 5 Results. Rounds 1-4 keep their existing inline ledger and progression.

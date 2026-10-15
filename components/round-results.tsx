@@ -9,6 +9,7 @@ import HighlightReel from "@/components/highlight-reel";
 import { loadEarlierLedgerRounds } from "@/lib/life-ledger";
 import { buildHighlightReel } from "@/lib/highlight-reel";
 import { getRoundIncomeCardCategory } from "@/lib/round-income";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 
 type RoundResultsProps = {
   round: number;
@@ -34,7 +35,7 @@ const pathwayNames: Record<string, string> = {
 const scenarioNames: Record<string, string> = {
   "financial-head-start": "Financial Head Start",
   "starting-from-scratch": "Starting From Scratch",
-  "student-loan-debt": "Student Loan Debt",
+  "student-loan-debt": "Student Debt",
 };
 
 const filingLabels: Record<string, string> = {
@@ -282,7 +283,7 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
   if (results.roundNumber === MAX_PLAYABLE_ROUND && view === "ledger") {
     return (
       <section className="rounded-2xl bg-[var(--brand-navy)]/5 p-4">
-        <h2 ref={ledgerHeading} tabIndex={-1} className="text-2xl font-black">My Tax Life &mdash; Full Life Ledger</h2>
+        <h2 ref={ledgerHeading} tabIndex={-1} className="text-2xl font-black">{PRODUCT_NAME} &mdash; Full Life Ledger</h2>
         <LifeLedger current={results} history={history} onRetry={retryHistory} />
         <div className="mt-4 flex flex-wrap gap-4 text-sm font-bold">
           <button type="button" onClick={() => changeView("highlights")} className="underline">Back to Highlight Reel</button>
@@ -379,11 +380,11 @@ export default function RoundResults({ round, player, restoreOnly = false, resto
         <div className="mt-4">
           <p role="status" className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
             Your five-round financial game is complete. All five rounds of Results and your Life Ledger
-            are saved. There is no next round. My Tax Life Story is not available yet.
+            are saved. There is no next round. An AI-generated story is not available yet.
           </p>
           <button type="button" onClick={() => changeView("highlights")}
             className="mt-3 rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white">
-            View My Tax Life Recap
+            View {PRODUCT_NAME} Recap
           </button>
         </div>
       ) : nextEnabled ? (

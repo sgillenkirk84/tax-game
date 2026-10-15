@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
+import { PRODUCT_NAME } from "@/lib/site-branding";
 
 type PlayerSession = {
   id?: string;
@@ -46,9 +47,6 @@ type GameChoice = {
   id: string;
   label: string;
   summary: string;
-  incomeDelta: number;
-  taxDelta: number;
-  savingsDelta: number;
 };
 
 const PLAYER_STORAGE_KEY = "my-tax-life-player";
@@ -182,46 +180,18 @@ const roleChoiceScenarios: GameChoice[] = [
     id: "take-opportunity",
     label: "Take the opportunity",
     summary: "Lean into your role's advantage and accept the financial tradeoff that comes with it.",
-    incomeDelta: 14000,
-    taxDelta: 1800,
-    savingsDelta: 2100,
   },
   {
     id: "play-safe",
     label: "Play it safe",
     summary: "Keep the simpler path and focus on lower risk with steadier, more predictable financial outcomes.",
-    incomeDelta: 6000,
-    taxDelta: 1000,
-    savingsDelta: 1200,
   },
   {
     id: "adapt-quickly",
     label: "Adapt quickly",
     summary: "Remain flexible and respond to changing life events without locking into one strategy too early.",
-    incomeDelta: 9000,
-    taxDelta: 1200,
-    savingsDelta: 1700,
   },
 ];
-
-const initialProfile = {
-  income: 42000,
-  taxes: 6200,
-  savings: 2100,
-};
-
-function profileForDecision(decisionId: string | null) {
-  const choice = roleChoiceScenarios.find((item) => item.id === decisionId);
-  if (!choice) {
-    return initialProfile;
-  }
-
-  return {
-    income: initialProfile.income + choice.incomeDelta,
-    taxes: Math.max(0, initialProfile.taxes + choice.taxDelta),
-    savings: initialProfile.savings + choice.savingsDelta,
-  };
-}
 
 async function readSavedSetup(player: PlayerSession): Promise<SavedSetup> {
   const response = await fetch("/api/students/setup", {
@@ -291,7 +261,6 @@ export default function StudentGamePage() {
   const [selectedRoleId, setSelectedRoleId] = useState("PATH-001");
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
   const [readyForNextStep, setReadyForNextStep] = useState(false);
-  const [profile, setProfile] = useState(initialProfile);
   const setupActionInProgress = useRef(false);
 
   useEffect(() => {
@@ -361,7 +330,6 @@ export default function StudentGamePage() {
             setSelectedRoleId(savedSetup.pathwayId);
           }
           setSelectedChoice(savedSetup.startingDecisionId);
-          setProfile(profileForDecision(savedSetup.startingDecisionId));
           setReadyForNextStep(savedSetup.status === "playing");
           setSetupLoading(false);
         });
@@ -382,10 +350,6 @@ export default function StudentGamePage() {
   }, []);
 
   const selectedRole = rolePathways.find((role) => role.id === selectedRoleId) ?? rolePathways[0];
-  const summaryText = useMemo(() => {
-    return `${profile.income.toLocaleString()} income · ${profile.taxes.toLocaleString()} taxes · ${profile.savings.toLocaleString()} savings`;
-  }, [profile]);
-
   function handleReset() {
     window.localStorage.removeItem(PLAYER_STORAGE_KEY);
     router.push("/play");
@@ -397,7 +361,6 @@ export default function StudentGamePage() {
       setSelectedRoleId(setup.pathwayId);
     }
     setSelectedChoice(setup.startingDecisionId);
-    setProfile(profileForDecision(setup.startingDecisionId));
     setReadyForNextStep(setup.status === "playing");
   }
 
@@ -443,7 +406,6 @@ export default function StudentGamePage() {
       setHasSelectedRole(true);
       setSelectedChoice(null);
       setReadyForNextStep(false);
-      setProfile(initialProfile);
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Could not save the selected role.");
     } finally {
@@ -475,7 +437,6 @@ export default function StudentGamePage() {
       }
 
       setSelectedChoice(drawnChoice.id);
-      setProfile(profileForDecision(drawnChoice.id));
       setReadyForNextStep(false);
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : "Could not save the starting decision.");
@@ -570,7 +531,7 @@ export default function StudentGamePage() {
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-              Student Dashboard
+              {PRODUCT_NAME} · Student Dashboard
             </p>
             <h1 className="mt-2 text-3xl font-black sm:text-4xl">Welcome, {player.displayName}</h1>
           </div>
@@ -627,7 +588,7 @@ export default function StudentGamePage() {
                       disabled={setupSaving}
                       className="w-full rounded-2xl border border-[var(--brand-navy)]/10 bg-white p-4 text-left transition hover:border-[var(--brand-navy)]/30"
                     >
-                      <div className="flex items-start justify-between gap-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <div className="text-lg font-black text-[var(--brand-navy)]">{role.name}</div>
                           <div className="mt-1 text-sm text-[var(--brand-navy)]/75">{role.shortDescription}</div>
@@ -742,10 +703,9 @@ export default function StudentGamePage() {
                                 </div>
                               </div>
 
-                              <div className="text-right text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand-navy)]/60">
-                                <div>Income {choice.incomeDelta >= 0 ? "+" : ""}${choice.incomeDelta}</div>
-                                <div>Tax {choice.taxDelta >= 0 ? "+" : ""}${choice.taxDelta}</div>
-                                <div>Save {choice.savingsDelta >= 0 ? "+" : ""}${choice.savingsDelta}</div>
+                              <div className="text-sm leading-relaxed text-[var(--brand-navy)]/75">
+                                <p className="font-bold">Starting Cash / Student Debt</p>
+                                <p className="mt-2">Starting cash and student debt are assigned when you begin Round 1, not by this decision.</p>
                               </div>
                             </div>
                           </div>
@@ -771,7 +731,7 @@ export default function StudentGamePage() {
 
                 {readyForNextStep ? (
                   <div className="rounded-2xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-4 text-sm font-semibold text-[var(--brand-navy)]">
-                    Setup complete. Choose Start Round 1 when available. The game will show your assigned financial starting scenario and beginning cash and debt. Then begin drawing physical gameplay cards.
+                    Setup complete. Choose Start Round 1 when available. The game will show your assigned financial starting scenario, starting cash and student debt. Then begin drawing physical gameplay cards.
                     {process.env.NEXT_PUBLIC_ROUND_ONE_ENABLED === "true" ? (
                       <Link
                         href="/play/round-1"
@@ -789,29 +749,25 @@ export default function StudentGamePage() {
           <aside className="space-y-6">
             <div className="rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-6 shadow-[0_20px_50px_rgba(15,29,82,0.08)]">
               <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-                Starting-decision preview
+                Your starting finances
               </p>
               <p className="mt-3 text-sm text-[var(--brand-navy)]/75">
-                These setup figures are a preview, not your Round 1 balances or calculated taxes. Your assigned financial starting scenario and beginning cash and debt appear after you start Round 1.
+                Your starting decision does not set your Round 1 balances. Complete setup, then start Round 1 to see your assigned financial starting scenario and actual amounts.
               </p>
 
               <div className="mt-5 space-y-4 text-sm text-[var(--brand-navy)]/80">
-                <div className="flex items-center justify-between border-b border-[var(--brand-navy)]/10 pb-2">
-                  <span>Income</span>
-                  <strong>${profile.income.toLocaleString()}</strong>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--brand-navy)]/10 pb-2">
+                  <span>Starting Cash</span>
+                  <strong>Assigned in Round 1</strong>
                 </div>
-                <div className="flex items-center justify-between border-b border-[var(--brand-navy)]/10 pb-2">
-                  <span>Taxes</span>
-                  <strong>${profile.taxes.toLocaleString()}</strong>
-                </div>
-                <div className="flex items-center justify-between border-b border-[var(--brand-navy)]/10 pb-2">
-                  <span>Savings</span>
-                  <strong>${profile.savings.toLocaleString()}</strong>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--brand-navy)]/10 pb-2">
+                  <span>Student Debt</span>
+                  <strong>Assigned in Round 1</strong>
                 </div>
               </div>
 
               <div className="mt-5 rounded-xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-3 text-sm font-semibold text-[var(--brand-navy)]">
-                {summaryText}
+                After starting Round 1, check your starting cash and student debt, then begin drawing physical gameplay cards.
               </div>
             </div>
 

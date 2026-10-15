@@ -62,13 +62,13 @@ const rolePathways: RolePathway[] = [
     startingIncomeType: "Any Income Card",
     startingCondition: "Draw one Income card in Round 1 and use its dollar amount as your starting primary income.",
     advantageName: "Always Climbing",
-    advantageRule: "Your primary income can never decrease. Each round draw a new Income card and keep the higher amount.",
+    advantageRule: "During working-life rounds, draw one Income card each round. After Round 1, keep the higher of your previous primary income and the new card.",
     challengeName: "Career Plateau",
     challengeRule: "A lower Income card does not reduce your income, but it also provides no increase that round.",
-    incomeRule: "Store your current primary income and use max(currentPrimaryIncome, newlyDrawnIncomeAmount).",
+    incomeRule: "In Round 1, save your Income card as your primary income. In later working-life rounds, save the card you drew even if it is lower; the game keeps your higher primary income.",
     resultMessage: "You kept climbing. Even when new opportunities offered less income, you maintained the highest income level you had reached.",
     graphic: "Career ladder + upward arrow",
-    developerNotes: "Preserve underlying tax classification for tax calculations even though the pathway comparison uses only the dollar amount.",
+    developerNotes: "Match the card you drew, whether it is W-2 or Business Income. The game keeps the income type of your retained higher-income card.",
   },
   {
     id: "PATH-002",
@@ -77,13 +77,13 @@ const rolePathways: RolePathway[] = [
     startingIncomeType: "Any Income Card",
     startingCondition: "Draw one Income card and use its dollar amount as your primary income.",
     advantageName: "Multiple Opportunities",
-    advantageRule: "Once per regular-life round, draw one additional Income card and keep it only if it is Business Income.",
+    advantageRule: "Each working-life round, draw one required Income card. You may then draw one additional card, but keep it only if it is Business Income.",
     challengeName: "More Tax Complexity",
-    challengeRule: "Additional business income may introduce business/self-employment tax rules and extra recordkeeping.",
-    incomeRule: "Primary income may come from either income category, but maximum one additional pathway-generated draw per round.",
+    challengeRule: "The game applies a simplified 9% business-income adjustment, not an additional self-employment tax.",
+    incomeRule: "Your required card may be W-2 or Business Income. You may take one optional extra draw. If it is W-2, return it to the bottom of the deck and stop. Do not take a replacement optional draw.",
     resultMessage: "Your willingness to pursue new opportunities gave you additional ways to earn income throughout your financial journey.",
     graphic: "Lightbulb + storefront / laptop",
-    developerNotes: "Keep tax classification of retained cards intact and preserve business-specific tax treatment through Tax Rules.",
+    developerNotes: "Save your required Income card first. Save the optional card only if it is Business Income, then choose Continue.",
   },
   {
     id: "PATH-003",
@@ -95,10 +95,10 @@ const rolePathways: RolePathway[] = [
     advantageRule: "You always have at least one dependent throughout the entire game, including retirement.",
     challengeName: "Family Responsibilities",
     challengeRule: "Having a dependent does not automatically make household expenses deductible; benefits still depend on Tax Rules.",
-    incomeRule: "Set minimumDependents = 1 for the entire game. Other dependents may be added or removed, but total dependents cannot fall below one.",
+    incomeRule: "Keep your permanent dependent throughout the game. Life Events may add or remove other dependents, but you always have at least one.",
     resultMessage: "Caring for another person remained part of your financial life from your working years through retirement.",
     graphic: "Family / caregiver icon",
-    developerNotes: "Track pathway dependents separately from life event dependents so permanent dependents are never accidentally removed.",
+    developerNotes: "Keep your permanent dependent separate from dependents added by Life Events. Your permanent dependent is never removed.",
   },
   {
     id: "PATH-004",
@@ -113,7 +113,7 @@ const rolePathways: RolePathway[] = [
     incomeRule: "Draw Income cards normally; if Bought a Home appears while already a homeowner, redraw.",
     resultMessage: "Homeownership gave you additional tax decisions, but owning a home did not automatically mean a bigger deduction.",
     graphic: "House + tax document",
-    developerNotes: "Homeowner status persists until removed by a life event; it enables scenarios without forcing itemization.",
+    developerNotes: "You stay a homeowner until a Life Event changes that. The game compares eligible itemized deductions with the standard deduction; homeownership does not automatically make itemizing better.",
   },
   {
     id: "PATH-005",
@@ -128,7 +128,7 @@ const rolePathways: RolePathway[] = [
     incomeRule: "Draw Income cards normally; education-related benefits are evaluated using the current Tax Rules.",
     resultMessage: "Investing in education created additional tax decisions throughout your working life.",
     graphic: "Graduation cap + briefcase",
-    developerNotes: "Do not hard-code an education credit or deduction amount here; Tax Rules should define the applicable benefit for the year.",
+    developerNotes: "Record the education-related card you drew. The game checks the current rules to calculate any eligible education benefit.",
   },
   {
     id: "PATH-006",
@@ -137,13 +137,13 @@ const rolePathways: RolePathway[] = [
     startingIncomeType: "Any Income Cards",
     startingCondition: "Draw two Income cards each regular-life round.",
     advantageName: "Two Income Streams",
-    advantageRule: "Draw two Income cards each round and use both income amounts. The cards may represent any combination of income types.",
+    advantageRule: "During working-life rounds, draw and save two Income cards, one at a time. Both count, in any combination of W-2 and Business Income.",
     challengeName: "More Income, More Complexity",
     challengeRule: "Both income amounts are included in the player's tax calculation, so multiple income sources create a more complicated tax situation.",
-    incomeRule: "Draw exactly two Income cards at each regular-life round, preserve each card separately, and keep both in the total income calculation.",
+    incomeRule: "Draw and save your first Income card, then draw and save your second. Both count toward your income. Once you are in retirement, follow the Retirement deck instructions instead.",
     resultMessage: "Your income came from multiple sources throughout your career, giving you more income opportunities and more tax situations to manage.",
     graphic: "Briefcase + laptop / two income arrows",
-    developerNotes: "Draw exactly two regular Income cards per round and keep each source separate so the engine preserves the underlying tax classification.",
+    developerNotes: "Choose Continue only after both required Income cards are saved. You do not choose one card over the other.",
   },
   {
     id: "PATH-007",
@@ -155,10 +155,10 @@ const rolePathways: RolePathway[] = [
     advantageRule: "Start the game with one Starter Investment token and let it follow the recurring-income and retirement rules defined for that asset.",
     challengeName: "Investment Income Counts",
     challengeRule: "Investment income must still be included according to the simulation's investment tax rules.",
-    incomeRule: "Draw Income cards normally and add recurring investment income from held investments into your financial state.",
+    incomeRule: "Draw Income cards normally during working-life rounds. The game includes recurring income from eligible investments automatically.",
     resultMessage: "Starting early gave your investments more opportunities to influence both your annual income and your retirement.",
     graphic: "Investment chart + growing coin/plant",
-    developerNotes: "Reference the Starter Investment asset rather than duplicating its values so there is one source of truth for the asset rules.",
+    developerNotes: "Keep your Starter Investment token. Follow the normal card draws; the game tracks its income and retirement value for you.",
   },
   {
     id: "PATH-008",
@@ -173,7 +173,7 @@ const rolePathways: RolePathway[] = [
     incomeRule: "Draw Income cards normally during working-life rounds; once retirement begins, follow Retirement deck rules instead of the normal primary Income draw.",
     resultMessage: "You reached retirement earlier and experienced the shift from working income to retirement income before the other pathways.",
     graphic: "Clock + retirement chair / finish-line icon",
-    developerNotes: "Retirement begins in Round 4. This is the defining mechanic of the pathway and affects when retirement income and investment rules apply.",
+    developerNotes: "Use the Income deck in Rounds 1-3 and the Retirement deck in Rounds 4-5. The game calculates your retirement income from the saved card and pathway rules.",
   },
 ];
 
@@ -611,11 +611,11 @@ export default function StudentGamePage() {
             {!hasSelectedRole ? (
               <div className="mt-8 rounded-2xl border border-[var(--brand-navy)]/10 bg-[var(--brand-ivory)] p-6">
                 <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-                  Role Card Step
+                  Step 1: Your Pathway / role card
                 </p>
                 <h3 className="mt-3 text-3xl font-black">Choose the role card you physically drew</h3>
                 <p className="mt-4 text-base leading-relaxed text-[var(--brand-navy)]/80">
-                  The player physically draws a role card before the round begins. Select the role that was drawn in the app so the rest of the game can continue with the correct pathway.
+                  Draw a physical Pathway / role card, then select its matching role below. Next, reveal your one-time starting decision in the app and complete setup before starting Round 1.
                 </p>
 
                 <div className="mt-6 grid gap-4">
@@ -705,9 +705,13 @@ export default function StudentGamePage() {
 
                 <div className="rounded-2xl border border-[var(--brand-navy)]/10 bg-white p-5">
                   <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-                    Starting Decision Card
+                    Step 2: In-app starting decision
                   </p>
-                  <h4 className="mt-3 text-2xl font-black">Random draw: one-time outcome</h4>
+                  <h4 className="mt-3 text-2xl font-black">Reveal your one-time starting decision</h4>
+                  <p className="mt-3 text-sm leading-relaxed text-[var(--brand-navy)]/75">
+                    The app randomly reveals this decision; do not draw a physical card or roll for it.
+                    This is separate from your financial starting scenario, which the game assigns when you start Round 1.
+                  </p>
 
                   {!selectedChoice ? (
                     <div className="mt-5">
@@ -717,7 +721,7 @@ export default function StudentGamePage() {
                         disabled={setupSaving}
                         className="rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
                       >
-                        {setupSaving ? "Saving..." : "Draw Starting Decision Card"}
+                        {setupSaving ? "Saving..." : "Reveal Starting Decision"}
                       </button>
                     </div>
                   ) : (
@@ -756,7 +760,7 @@ export default function StudentGamePage() {
                             disabled={setupSaving}
                             className="rounded-xl bg-[var(--brand-navy)] px-6 py-3 font-bold text-white transition hover:bg-[var(--brand-navy-deep)]"
                           >
-                            {setupSaving ? "Saving..." : "Move to the next step"}
+                            {setupSaving ? "Saving..." : "Complete Setup"}
                           </button>
                         </div>
                       ) : null}
@@ -767,7 +771,7 @@ export default function StudentGamePage() {
 
                 {readyForNextStep ? (
                   <div className="rounded-2xl border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 p-4 text-sm font-semibold text-[var(--brand-navy)]">
-                    Starting setup complete. This player is ready to proceed to the next game phase.
+                    Setup complete. Choose Start Round 1 when available. The game will show your assigned financial starting scenario and beginning cash and debt. Then begin drawing physical gameplay cards.
                     {process.env.NEXT_PUBLIC_ROUND_ONE_ENABLED === "true" ? (
                       <Link
                         href="/play/round-1"
@@ -785,7 +789,10 @@ export default function StudentGamePage() {
           <aside className="space-y-6">
             <div className="rounded-[2rem] border border-[var(--brand-navy)]/20 bg-[var(--brand-white)] p-6 shadow-[0_20px_50px_rgba(15,29,82,0.08)]">
               <p className="text-xs font-black uppercase tracking-[0.25em] text-[var(--brand-gold)]">
-                Financial Snapshot
+                Starting-decision preview
+              </p>
+              <p className="mt-3 text-sm text-[var(--brand-navy)]/75">
+                These setup figures are a preview, not your Round 1 balances or calculated taxes. Your assigned financial starting scenario and beginning cash and debt appear after you start Round 1.
               </p>
 
               <div className="mt-5 space-y-4 text-sm text-[var(--brand-navy)]/80">
@@ -830,9 +837,17 @@ export default function StudentGamePage() {
 
                 <div className="rounded-xl border border-[var(--brand-navy)]/10 bg-[var(--brand-ivory)] p-3">
                   <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--brand-navy)]/60">
-                    Developer Note
+                    Play reminder
                   </div>
                   <div className="mt-2 leading-relaxed">{selectedRole.developerNotes}</div>
+                  <p className="mt-2 leading-relaxed">
+                    The app records your physical gameplay draws; it does not randomly choose those cards.
+                    Draw from the physical deck shown, select the matching card on screen, and choose Save This Card.
+                    Save all required cards before choosing Continue. After Deduction, choose Calculate My Taxes,
+                    then Continue to Tax Prepayment and draw and save that physical card.
+                    Complete any keep-or-redraw choice shown, continue to Results, and choose Finish Round.
+                    Start the next round from saved Results when available.
+                  </p>
                 </div>
               </div>
             </div>

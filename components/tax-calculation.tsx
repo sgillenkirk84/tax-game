@@ -162,7 +162,7 @@ export default function TaxCalculation({ round, player, readOnly = false, onCalc
         </p>
         <p className="mt-2 rounded-xl bg-white p-3 text-sm font-semibold">
           {advanceTarget("deduction", round)
-            ? "Next, you will choose your physical Tax Prepayment card to find out how much tax you have already paid."
+            ? "Next, choose Continue to Tax Prepayment. Shuffle that physical deck, draw one card, then select and save its match on screen to record how much tax you have already paid."
             : "Tax Prepayment is not available yet."} Your tax return above is saved and will not change.
         </p>
       </section>

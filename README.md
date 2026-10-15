@@ -4,6 +4,22 @@ Money Moves is an educational financial literacy simulation game for students
 and classrooms. Players explore how income, family, housing, deductions,
 investments, taxes, and retirement can shape a financial journey.
 
+## Student onboarding and physical draws
+
+Select the physical Pathway/role card, reveal the one-time in-app starting
+decision, and complete setup. Starting Round 1 separately assigns the financial
+starting scenario and beginning cash/debt; the setup preview is not the saved
+round balance or calculated tax.
+
+Gameplay still records physical draws, not computer-generated gameplay cards.
+Students select the matching card on screen, save the required card(s), and
+continue. The instructions distinguish the Entrepreneur's single optional draw
+(no replacement when it is W-2), Side Hustler's two required working-life Income
+cards, and Corporate Climber's retained higher primary income. Retirement,
+eligibility, calculation, prepayment and round-transition rules are unchanged.
+Business-income copy describes the existing simplified 9% adjustment, not an
+additional self-employment tax.
+
 ## Run locally
 
 1. Install the project dependencies with `npm.cmd install`.

@@ -193,7 +193,7 @@ export default function CardEntry({
                 ? "Your first card stays on record. Physically draw one more card and select it below."
                 : rules.min > savedCards.length
                 ? `${savedCards.length} of ${rules.min} cards saved. Draw and save ${rules.min - savedCards.length} more.`
-                : `${savedCards.length} card saved. You may draw ${remaining} more if your pathway allows it.`}
+                : `${savedCards.length} card saved. You may draw ${remaining} more if your pathway allows it. This optional draw counts only if it is Business Income. If it is W-2, return it to the bottom of the deck and stop; do not take a replacement optional draw. Choose Continue when you are done.`}
           </p>
           <div className={compactSavedCards ? "grid gap-3 sm:grid-cols-2" : "space-y-3"}>
             {savedCards.map((savedCard, position) => compactSavedCards ? (

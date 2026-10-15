@@ -333,7 +333,7 @@ test("Round 4 opens shared card stages through Deduction and keeps all regular-l
   assert.doesNotMatch(stageInstructionsFor("income-or-retirement", "PATH-008", 4), /Income deck/);
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-006", 4), /two cards/);
   assert.match(stageInstructionsFor("income-or-retirement", "PATH-002", 4), /Business Income/);
-  assert.match(stageInstructionsFor("life-event", "PATH-003", 4), /permanent dependent token/);
+  assert.match(stageInstructionsFor("life-event", "PATH-003", 4), /permanent dependent:/);
   assert.equal(resultsAvailableForRound(4, 4), true);
 });
 

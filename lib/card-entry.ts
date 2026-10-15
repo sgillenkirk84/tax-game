@@ -31,11 +31,11 @@ const stageCategories: Record<Exclude<CardStage, "income-or-retirement">, CardCa
 };
 
 export const stageInstructions: Record<CardStage, string> = {
-  "income-or-retirement": "Shuffle the deck, draw one card, and select the card that matches the one in your hand.",
-  "life-event": "Shuffle the Life Event deck, draw one card, and select the card that matches the one in your hand.",
-  wildcard: "Shuffle the Wildcard deck, draw one card, and select the card that matches the one in your hand.",
-  deduction: "Shuffle the Deduction deck, draw one card, and select the card that matches the one in your hand.",
-  "tax-prepayment": "Shuffle the Tax Prepayment deck, draw one card, and select the card that matches the one in your hand.",
+  "income-or-retirement": "Shuffle the physical Income deck and draw one card. Select the matching card on screen and choose Save This Card to record it, then Continue.",
+  "life-event": "Shuffle the physical Life Event deck and draw one card. Select the matching card on screen and choose Save This Card to record it, then Continue.",
+  wildcard: "Shuffle the physical Wildcard deck and draw one card. Select the matching card on screen, make any choice shown, and choose Save This Card, then Continue.",
+  deduction: "Shuffle the physical Deduction deck and draw one card. If it does not apply, return it to the bottom of the deck and draw again. Select the matching eligible card on screen and choose Save This Card, then Calculate My Taxes.",
+  "tax-prepayment": "Shuffle the physical Tax Prepayment deck and draw one card. Select the matching card on screen and choose Save This Card. Complete any keep-or-redraw choice shown, then Continue to Results and Life Ledger.",
   "audit-if-triggered": "Your teacher will tell you if an audit applies. Draw an Audit Result card and select the matching card.",
 };
 
@@ -99,19 +99,22 @@ export function stageCardRules(stage: CardStage, pathwayId: string, round: numbe
 export function stageInstructionsFor(stage: CardStage, pathwayId: string, round: number): string {
   if (isRoundCardStageAvailable(stage, round) && stage === "income-or-retirement") {
     if (getRoundIncomeCardCategory(pathwayId, round) === "Retirement") {
-      return "You are in retirement this round. Physically shuffle the Retirement deck, draw one card, and select the card that matches the one in your hand. Save the Retirement card; its income components remain separate for later tax calculation.";
+      return "You are in retirement this round. Physically shuffle the Retirement deck, draw one card, and select the matching card on screen. Choose Save This Card, then Continue. The game keeps the different types of retirement income separate when calculating taxes.";
     }
     if (pathwayId === "PATH-006") {
-      return "Side Hustler: shuffle the Income deck and draw two cards, one at a time. Select each card that matches one in your hand and save it. Both cards count toward your income.";
+      return "Side Hustler: shuffle the physical Income deck and draw two cards, one at a time. Select and save each matching card on screen. Both count, whether W-2 or Business Income. Choose Continue after both cards are saved.";
     }
     if (pathwayId === "PATH-002") {
-      return "Shuffle the Income deck, draw one card, and select the card that matches the one in your hand. As an Entrepreneur you may then draw one additional Income card, but you keep it only if it is Business Income.";
+      return "Shuffle the physical Income deck, draw one required card, and select and save its match on screen. As an Entrepreneur you may then draw one additional Income card, but keep it only if it is Business Income. If the optional card is W-2, return it to the bottom of the deck and stop; do not take a replacement optional draw. Save an optional Business card before choosing Continue, or Continue after your required card if you skip the extra draw.";
+    }
+    if (pathwayId === "PATH-001") {
+      return "Corporate Climber: shuffle the physical Income deck and draw one card. Select and save its match on screen, then Continue. In Round 1, it becomes your primary income. In later working-life rounds, the game keeps the higher of your previous primary income and the new card, including the retained card's income type. Save the card you drew even if it is lower; do not redraw just because it pays less.";
     }
   }
   if (isRoundCardStageAvailable(stage, round) && stage === "life-event") {
     const base = stageInstructions[stage];
     return pathwayId === "PATH-003"
-      ? `${base} Keep your permanent dependent token: Life Events can never reduce your dependents below one. If the card does not apply to you, return it to the bottom of the deck and draw again.`
+      ? `${base} Keep your permanent dependent: Life Events can never reduce your dependents below one. If the card does not apply to you, return it to the bottom of the deck and draw again.`
       : `${base} If the card does not apply to you, return it to the bottom of the deck and draw again.`;
   }
   return stageInstructions[stage];
@@ -122,11 +125,11 @@ export type CardSection = { heading: string | null; subcategory: string | null; 
 // How a deck is grouped on screen. Decks without an entry show as one list.
 const deckSections: Partial<Record<CardCategory, CardSection[]>> = {
   Income: [
-    { heading: "W-2 Jobs", subcategory: "W-2" },
+    { heading: "W-2 Jobs", subcategory: "W-2", note: "W-2 Income means wages from an employer. Select the card you physically drew, not the income type you prefer." },
     {
       heading: "Business Income",
       subcategory: "Business",
-      note: `Business income may involve additional self-employment taxes. ${PRODUCT_NAME} will calculate the applicable taxes automatically.`,
+      note: `Business Income means income from operating a business. ${PRODUCT_NAME} applies a simplified 9% business-income adjustment when calculating taxes; this is not an additional self-employment tax. Select the card you physically drew.`,
     },
   ],
 };
